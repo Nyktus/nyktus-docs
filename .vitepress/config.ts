@@ -32,7 +32,10 @@ export default defineConfig({
     logo: { src: '/nyktus-mark.svg', alt: '' },
     siteTitle: 'Nyktus',
 
-    nav: [{ text: 'Getting started', link: '/getting-started/introduction', activeMatch: '/getting-started/' }],
+    nav: [
+      { text: 'Getting started', link: '/getting-started/introduction', activeMatch: '/getting-started/' },
+      { text: 'Security', link: '/security/stealth', activeMatch: '/security/' },
+    ],
 
     sidebar: {
       '/getting-started/': [
@@ -43,6 +46,12 @@ export default defineConfig({
             { text: 'Concepts', link: '/getting-started/concepts' },
             { text: 'Architecture', link: '/getting-started/architecture' },
           ],
+        },
+      ],
+      '/security/': [
+        {
+          text: 'Security',
+          items: [{ text: 'Stealth considerations', link: '/security/stealth' }],
         },
       ],
     },
