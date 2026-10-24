@@ -38,6 +38,7 @@ export default defineConfig({
 
     nav: [
       { text: 'Getting started', link: '/getting-started/introduction', activeMatch: '/getting-started/' },
+      { text: 'Guides', link: '/guides/honeytokens', activeMatch: '/guides/' },
       { text: 'Security', link: '/security/stealth', activeMatch: '/security/' },
       { text: 'API reference', link: '/api/', activeMatch: '/api/' },
     ],
@@ -50,6 +51,15 @@ export default defineConfig({
             { text: 'What Nyktus does', link: '/getting-started/introduction' },
             { text: 'Concepts', link: '/getting-started/concepts' },
             { text: 'Architecture', link: '/getting-started/architecture' },
+          ],
+        },
+      ],
+      '/guides/': [
+        {
+          text: 'Decoys',
+          items: [
+            { text: 'Honeytokens', link: '/guides/honeytokens' },
+            { text: 'DNS honeytokens', link: '/guides/dns-honeytokens' },
           ],
         },
       ],
