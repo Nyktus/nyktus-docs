@@ -9,6 +9,6 @@ hero:
       text: What Nyktus does
       link: /getting-started/introduction
     - theme: alt
-      text: Architecture
-      link: /getting-started/architecture
+      text: Quickstart
+      link: /getting-started/quickstart
 ---

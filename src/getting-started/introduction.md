@@ -42,3 +42,4 @@ An intruder who recognizes a decoy can also avoid it, so a decoy that looks like
 
 - [Concepts](/getting-started/concepts) defines the terms that every page uses.
 - [Architecture](/getting-started/architecture) shows the parts of Nyktus and where each one runs.
+- The [quickstart](/getting-started/quickstart) builds Nyktus and takes a honeytoken through to an incident.
