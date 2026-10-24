@@ -5,7 +5,7 @@ description: Choose a type, create a honeytoken, place it, and know what Nyktus 
 
 # Honeytokens
 
-A honeytoken is a URL or host name that nobody has a reason to open or resolve. You place it where only an intruder would look, for example as a link in a document on a file share, as an image in a mail template or as a host in a configuration file. Nyktus records an event when it is requested or resolved. This page helps you choose the type, create the honeytoken, place it and read what it records.
+A honeytoken is a URL or host name that nobody has a reason to open or resolve. You place it where only an intruder would look, for example as a link in a document on a file share, as an image in a mail template or as a host in a configuration file. Nyktus records an event when it is requested or resolved, and events become [incidents](/guides/incidents) that raise an [alert](/guides/alerting). This page helps you choose the type, create the honeytoken, place it and read what it records.
 
 ## Choose a type
 

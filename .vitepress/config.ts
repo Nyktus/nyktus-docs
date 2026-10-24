@@ -73,6 +73,13 @@ export default defineConfig({
             { text: 'Catalog reference', link: '/guides/catalog-reference' },
           ],
         },
+        {
+          text: 'Detection',
+          items: [
+            { text: 'Incidents', link: '/guides/incidents' },
+            { text: 'Alerting', link: '/guides/alerting' },
+          ],
+        },
       ],
       '/api/': [
         {
