@@ -3,6 +3,10 @@
 
 import { defineConfig } from 'vitepress'
 import { plateTheme } from './plate-theme'
+import { loadSpec, tagPages } from '../scripts/openapi.mjs'
+
+// The reference pages are generated from the specification, so the sidebar lists its tags.
+const apiTags = tagPages(loadSpec())
 
 // English is the root locale. To add a language:
 //   1. Add its entry to `locales` below, with its own `link`, `themeConfig.nav` and `sidebar`.
@@ -35,6 +39,7 @@ export default defineConfig({
     nav: [
       { text: 'Getting started', link: '/getting-started/introduction', activeMatch: '/getting-started/' },
       { text: 'Security', link: '/security/stealth', activeMatch: '/security/' },
+      { text: 'API reference', link: '/api/', activeMatch: '/api/' },
     ],
 
     sidebar: {
@@ -46,6 +51,19 @@ export default defineConfig({
             { text: 'Concepts', link: '/getting-started/concepts' },
             { text: 'Architecture', link: '/getting-started/architecture' },
           ],
+        },
+      ],
+      '/api/': [
+        {
+          text: 'API reference',
+          items: [
+            { text: 'Overview', link: '/api/' },
+            { text: 'Authentication', link: '/api/authentication' },
+          ],
+        },
+        {
+          text: 'Operations',
+          items: apiTags.map((tag) => ({ text: tag.title, link: tag.link })),
         },
       ],
       '/security/': [

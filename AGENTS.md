@@ -15,7 +15,8 @@ The documentation is English only. The structure allows more languages, see the 
 | Site | VitePress, static output |
 | Pages | Markdown in `src/` |
 | Fonts | Fontsource packages, bundled by the build |
-| Checks | `scripts/check-anchors.mjs` after every build |
+| API reference | Generated at build time from `data/openapi.yaml` by `scripts/generate-api.mjs` |
+| Checks | `scripts/check-anchors.mjs` and `npm run check:sync` in every build |
 
 Nothing is loaded from another origin at runtime: no CDN, no web fonts, no analytics, no embedded third-party content. Nyktus makes the same promise and the documentation keeps it.
 
@@ -24,6 +25,9 @@ Nothing is loaded from another origin at runtime: no CDN, no web fonts, no analy
 ```
 src/                pages; one folder per section
 src/public/         files that are served as they are
+src/api/reference/  generated pages of the API reference; not committed
+data/               copies of files of the main repository, see "Source of truth"
+sync.json           the commit of the main repository that the copies come from, and their hashes
 .vitepress/         site configuration and theme
 scripts/            checks and generators, run by developers and the CI, never in the browser
 ```
@@ -36,7 +40,8 @@ Nyktus is the source of truth for its behavior. Read the code, the OpenAPI speci
 
 - `api/openapi.yaml` is the only source for the endpoints of the API. Pages link to the reference and do not repeat it.
 - The deception catalog reference is generated from the published catalog file. Do not write it by hand.
-- Both are copied from the main repository by a script. Do not edit the copies.
+- The copies in `data/` come from the main repository at the commit that `sync.json` pins. Update them with `npm run sync -- <checkout>`, optionally with `--ref <revision>` to move the pin; the commit must be on `origin/main` of the checkout. Do not edit a copy: the build fails when it differs from its recorded hash. An error in the specification is fixed in the main repository.
+- A description in the API reference is the text of the specification. To improve it, change the specification there, not the generator here.
 
 ## Writing rules
 
@@ -78,8 +83,10 @@ Published URLs are permanent. When a page moves or is renamed, add a redirect fr
 | Command | Purpose |
 |---|---|
 | `npm ci` | Install the packages exactly as locked |
-| `npm run dev` | Development server with live reload |
-| `npm run build` | Strict build, then the check of hash links |
+| `npm run dev` | Generate the API pages, then start the development server with live reload |
+| `npm run build` | Check the copies, generate the API pages, build strictly, then check the hash links |
+| `npm run sync -- <checkout>` | Copy the pinned files from a checkout of the main repository |
+| `npm run generate` | Write the pages of the API reference |
 | `npm run preview` | Serve the production build |
 | `npm audit --audit-level=high` | Report known vulnerabilities in the packages |
 

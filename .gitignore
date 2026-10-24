@@ -8,6 +8,9 @@
 *.pem
 *.key
 
+# Pages generated from the OpenAPI specification
+/src/api/reference/
+
 # Node
 node_modules/
 .vitepress/cache/

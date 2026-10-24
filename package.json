@@ -7,15 +7,19 @@
     "node": ">=24"
   },
   "scripts": {
-    "dev": "vitepress dev",
-    "build": "vitepress build && npm run check:anchors",
+    "dev": "npm run generate && vitepress dev",
+    "build": "npm run check:sync && npm run generate && vitepress build && npm run check:anchors",
+    "generate": "node scripts/generate-api.mjs",
+    "sync": "node scripts/sync.mjs",
+    "check:sync": "node scripts/sync.mjs --check",
     "check:anchors": "node scripts/check-anchors.mjs",
     "preview": "vitepress preview"
   },
   "devDependencies": {
     "@fontsource-variable/jetbrains-mono": "5.3.0",
     "@fontsource-variable/schibsted-grotesk": "5.3.0",
-    "vitepress": "1.6.4"
+    "vitepress": "1.6.4",
+    "yaml": "2.9.1"
   },
   "overrides": {
     "vite": "7.3.7",
