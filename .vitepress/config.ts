@@ -39,6 +39,7 @@ export default defineConfig({
     nav: [
       { text: 'Getting started', link: '/getting-started/introduction', activeMatch: '/getting-started/' },
       { text: 'Guides', link: '/guides/honeytokens', activeMatch: '/guides/' },
+      { text: 'Operate', link: '/operate/database', activeMatch: '/operate/' },
       { text: 'Security', link: '/security/stealth', activeMatch: '/security/' },
       { text: 'API reference', link: '/api/', activeMatch: '/api/' },
     ],
@@ -79,6 +80,23 @@ export default defineConfig({
           items: [
             { text: 'Incidents', link: '/guides/incidents' },
             { text: 'Alerting', link: '/guides/alerting' },
+          ],
+        },
+      ],
+      '/operate/': [
+        {
+          text: 'Install',
+          items: [
+            { text: 'Database setup', link: '/operate/database' },
+            { text: 'First start', link: '/operate/first-start' },
+            { text: 'Reverse proxy', link: '/operate/reverse-proxy' },
+          ],
+        },
+        {
+          text: 'Run',
+          items: [
+            { text: 'Configuration', link: '/operate/configuration' },
+            { text: 'Sign-in and sessions', link: '/operate/sign-in' },
           ],
         },
       ],
