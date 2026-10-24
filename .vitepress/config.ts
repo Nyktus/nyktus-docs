@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import { defineConfig } from 'vitepress'
+import { plateTheme } from './plate-theme'
 
 // English is the root locale. To add a language:
 //   1. Add its entry to `locales` below, with its own `link`, `themeConfig.nav` and `sidebar`.
@@ -17,6 +18,9 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
 
+  // One light theme: the plates for code are dark in both cases.
+  appearance: false,
+
   locales: {
     root: {
       label: 'English',
@@ -25,7 +29,8 @@ export default defineConfig({
   },
 
   themeConfig: {
-    siteTitle: 'Nyktus Docs',
+    logo: { src: '/nyktus-mark.svg', alt: '' },
+    siteTitle: 'Nyktus',
 
     nav: [],
     sidebar: {},
@@ -43,15 +48,19 @@ export default defineConfig({
 
     footer: {
       message:
-        'Text under CC BY-SA 4.0. MITRE, ATT&CK and MITRE Engage are trademarks of The MITRE Corporation; Nyktus is not affiliated with or endorsed by MITRE.',
+        'Text under CC BY-SA 4.0. MITRE, ATT&CK and MITRE Engage are trademarks of The MITRE Corporation; Nyktus is not affiliated with or endorsed by MITRE. Typefaces: <a href="/licenses/OFL-SchibstedGrotesk.txt">Schibsted Grotesk</a> and <a href="/licenses/OFL-JetBrainsMono.txt">JetBrains Mono</a> under the SIL Open Font License.',
       copyright: 'Copyright © The Nyktus Authors',
     },
   },
 
   // Nothing is loaded from another origin at runtime, the same promise that Nyktus makes.
-  head: [['meta', { name: 'theme-color', content: '#eef1ef' }]],
+  head: [
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
+    ['meta', { name: 'theme-color', content: '#eef1ef' }],
+  ],
 
   markdown: {
     lineNumbers: false,
+    theme: plateTheme,
   },
 })
