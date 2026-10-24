@@ -615,7 +615,12 @@ body {
 }
 
 .VPHome .VPButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 3rem;
+  padding: 0 1.3rem;
+  line-height: 1;
   border-radius: var(--radius-sm);
   font-family: var(--font-sans);
   font-weight: 650;

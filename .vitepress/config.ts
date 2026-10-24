@@ -32,8 +32,20 @@ export default defineConfig({
     logo: { src: '/nyktus-mark.svg', alt: '' },
     siteTitle: 'Nyktus',
 
-    nav: [],
-    sidebar: {},
+    nav: [{ text: 'Getting started', link: '/getting-started/introduction', activeMatch: '/getting-started/' }],
+
+    sidebar: {
+      '/getting-started/': [
+        {
+          text: 'Getting started',
+          items: [
+            { text: 'What Nyktus does', link: '/getting-started/introduction' },
+            { text: 'Concepts', link: '/getting-started/concepts' },
+            { text: 'Architecture', link: '/getting-started/architecture' },
+          ],
+        },
+      ],
+    },
 
     search: {
       provider: 'local',
