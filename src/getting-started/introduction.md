@@ -36,7 +36,7 @@ Every interaction is recorded as an event. Events are grouped into one incident 
 
 A honeytoken fires only when someone acts on it: requests a URL, resolves a DNS name or uses a credential. Opening a stolen database dump in a viewer, or reading exfiltrated documents offline, triggers nothing. Nyktus reliably detects the *use* of stolen data and credentials, not the theft itself.
 
-An intruder who recognizes a decoy can also avoid it, so a decoy that looks like a decoy is worth less.
+An intruder who recognizes a decoy can also avoid it, so a decoy that looks like a decoy is worth less. The [stealth considerations](/security/stealth) list what an intruder can see of your setup and what you can do about it.
 
 ## Next
 
