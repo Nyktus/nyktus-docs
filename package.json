@@ -1,0 +1,22 @@
+{
+  "name": "nyktus-docs",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build && npm run check:anchors",
+    "check:anchors": "node scripts/check-anchors.mjs",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "1.6.4"
+  },
+  "overrides": {
+    "vite": "7.3.7",
+    "@vitejs/plugin-vue": "6.0.10"
+  }
+}
