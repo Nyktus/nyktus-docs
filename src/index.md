@@ -1,9 +1,7 @@
 ---
+layout: home
 title: Nyktus Docs
+hero:
+  text: Nobody opens a decoy by accident.
+  tagline: Nyktus deploys honeytokens and honeypots across your infrastructure. This documentation is being written; it will cover getting started, the guides for every part, running an installation, and the API reference.
 ---
-
-# Nyktus
-
-Deploy honeytokens and honeypots across your infrastructure to detect intruders, insider threats, data breaches and misconfigured systems.
-
-The documentation is being written. It will cover getting started, the guides for every part of Nyktus, running an installation, and the API reference.

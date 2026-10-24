@@ -2,3 +2,10 @@ Nyktus documentation
 Copyright The Nyktus Authors
 Text licensed under CC BY-SA 4.0, code under the GNU Affero General Public
 License, version 3 or later. See LICENSE.
+
+The site includes the typefaces Schibsted Grotesk
+(Copyright 2023 The Schibsted-Grotesk Project Authors) and JetBrains Mono
+(Copyright 2020 The JetBrains Mono Project Authors) as WOFF2 files of the
+Fontsource packages, bundled by the build. Both are licensed under the SIL Open
+Font License, Version 1.1, whose text is in src/public/licenses/. The fonts are
+not loaded from any other source.
