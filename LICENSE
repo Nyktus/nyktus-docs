@@ -1,0 +1,14 @@
+The documentation of Nyktus. Copyright The Nyktus Authors.
+
+The text and the images of the documentation, that is the Markdown files and
+the media next to them, are licensed under the Creative Commons
+Attribution-ShareAlike 4.0 International License. Its text is in
+LICENSES/CC-BY-SA-4.0.txt.
+
+The code that builds the site, that is the theme, the components, the scripts
+and the configuration, is licensed under the GNU Affero General Public
+License, version 3 or later. Its text is in LICENSES/AGPL-3.0-or-later.txt.
+Source files state their license in an SPDX header.
+
+Data that this repository copies from Nyktus, and third-party data and
+typefaces, keep their own terms. NOTICE lists them.

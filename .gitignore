@@ -1,0 +1,25 @@
+# local files and notes
+/.localdev/
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Node
+node_modules/
+.vitepress/cache/
+.vitepress/dist/
+*.tsbuildinfo
+
+# Editors and operating systems
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+
+# Personal AI agent settings
+.claude/settings.local.json
+CLAUDE.local.md
