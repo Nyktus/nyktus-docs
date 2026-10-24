@@ -5,6 +5,10 @@
     "data/openapi.yaml": {
       "source": "api/openapi.yaml",
       "sha256": "5d5ed4313e4f696f8f29f04722c72e757dc3aeaa99a0853033074a5832ce85e6"
+    },
+    "data/deception-catalog.json": {
+      "source": "docs/public/deception-catalog.json",
+      "sha256": "3d0d97fecbe3c54d569f0e8f1d643163ce54ebdc25c83edaa3ce79f3b840fa23"
     }
   }
 }

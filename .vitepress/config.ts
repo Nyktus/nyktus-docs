@@ -64,6 +64,15 @@ export default defineConfig({
             { text: 'Sensor', link: '/guides/sensor' },
           ],
         },
+        {
+          text: 'Stories',
+          items: [
+            { text: 'Scenarios', link: '/guides/scenarios' },
+            { text: 'Artifacts', link: '/guides/artifacts' },
+            { text: 'Deception catalog', link: '/guides/catalog' },
+            { text: 'Catalog reference', link: '/guides/catalog-reference' },
+          ],
+        },
       ],
       '/api/': [
         {

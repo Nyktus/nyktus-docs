@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "npm run generate && vitepress dev",
     "build": "npm run check:sync && npm run generate && vitepress build && npm run check:anchors",
-    "generate": "node scripts/generate-api.mjs",
+    "generate": "node scripts/generate-api.mjs && node scripts/generate-catalog.mjs",
     "sync": "node scripts/sync.mjs",
     "check:sync": "node scripts/sync.mjs --check",
     "check:anchors": "node scripts/check-anchors.mjs",
