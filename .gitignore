@@ -10,6 +10,8 @@
 
 # Pages generated from the OpenAPI specification
 /src/api/reference/
+/src/guides/catalog-reference.md
+/src/public/deception-catalog.json
 
 # Node
 node_modules/

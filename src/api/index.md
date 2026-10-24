@@ -30,8 +30,8 @@ Every error uses the same envelope:
 {
   "error": {
     "code": "invalid_request",
-    "message": "<what is wrong, without internal details>",
-    "request_id": "<the ID of the request>"
+    "message": "persona Account: is required",
+    "request_id": "N2TWVEHSDJGMSFXJ74M6N6VXKP"
   }
 }
 ```

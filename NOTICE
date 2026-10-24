@@ -9,3 +9,25 @@ The site includes the typefaces Schibsted Grotesk
 Fontsource packages, bundled by the build. Both are licensed under the SIL Open
 Font License, Version 1.1, whose text is in src/public/licenses/. The fonts are
 not loaded from any other source.
+
+This site includes data of the main repository: the OpenAPI specification in
+data/openapi.yaml, and the published deception catalog in
+data/deception-catalog.json, which holds the following third-party data.
+
+This product includes data from MITRE ATT&CK(R) Enterprise, version 20.0: the
+identifiers and names of the techniques that the catalog uses.
+
+(c) 2026 The MITRE Corporation. This work is reproduced and distributed with
+the permission of The MITRE Corporation.
+
+ATT&CK(R) is a registered trademark of The MITRE Corporation.
+Terms of use: https://attack.mitre.org/resources/legal-and-branding/terms-of-use/
+
+This product includes data from MITRE Engage(TM), version 1.0: the identifiers
+and names of the engagement activities that the catalog uses.
+
+(c) 2021 The MITRE Corporation. Approved for Public Release; Distribution
+Unlimited. Public Release Case Number PR_21-01759-28. Licensed under the
+Apache License, Version 2.0: https://www.apache.org/licenses/LICENSE-2.0
+
+MITRE Engage(TM) is a trademark of The MITRE Corporation.
