@@ -37,7 +37,7 @@ Settings of a server role are only read when the role runs. A process started wi
 | Variable | Default | Description |
 |---|---|---|
 | `NYKTUS_CONSOLE_ADDR` | `127.0.0.1:8080` | Address and port the console listens on. |
-| `NYKTUS_CONSOLE_URL` | required; in development `http://` and the listen address | Address under which users reach the console, usually through your reverse proxy, such as `https://nyktus.example.com`. Links that the console hands out, such as the [setup URL](/operate/first-start) and activation and password reset links, start with it. Scheme, host and port only: `https` is required, `http` is allowed in development. |
+| `NYKTUS_CONSOLE_URL` | required; in development `http://` and the listen address | Address under which users reach the console, usually through your reverse proxy, such as `https://nyktus.example.com`. Links that the console hands out, such as the [setup URL](/operate/first-start) and the [activation and password reset links](/operate/users), start with it. Scheme, host and port only: `https` is required, `http` is allowed in development. |
 | `NYKTUS_CONSOLE_DATABASE_URL` | required, secret | Connection URL of the console's login role. See [Database setup](/operate/database). |
 | `NYKTUS_TRIGGER_URL` | required, also in development | Public address of the trigger, such as `https://t.example.net`. The URL of a [honeytoken](/guides/honeytokens) is this address followed by its trigger value, so it is what an attacker sees. Scheme, host and port only: `https` is required, `http` is allowed in development. Its host must differ from that of `NYKTUS_CONSOLE_URL`; in development, a different port suffices. See [Choosing the address of the trigger](/guides/honeytokens#the-address-of-the-trigger). |
 | `NYKTUS_DNS_ZONES` | empty | The zones of the [DNS role](/guides/dns-honeytokens), as for the role `dns`. The console shows the names of DNS honeytokens under them; without zones, it refuses to create DNS honeytokens. No zone may hold the host of `NYKTUS_CONSOLE_URL` or `NYKTUS_TRIGGER_URL`. |
@@ -80,7 +80,7 @@ The worker correlates the events of honeytokens into [incidents](/guides/inciden
 | `NYKTUS_WORKER_CONCURRENCY` | `4` | Events that the worker processes at a time, between 1 and 32. Each holds a connection to the database while it is processed. |
 | `NYKTUS_WORKER_DELIVERY_CONCURRENCY` | `4` | Alerts that the worker delivers at a time, between 1 and 32. A delivery holds a connection to the database only while it records an attempt, not while it waits for the receiver. The worker opens up to both values together of connections. |
 | `NYKTUS_CONSOLE_URL` | required; in development `http://127.0.0.1:8080` | The address of the console, as for the role `console`. Alerts link their incident under it. |
-| `NYKTUS_AUDIT_RETENTION_DAYS` | `365` | Days that the audit log keeps an entry, between 90 and 3650. |
+| `NYKTUS_AUDIT_RETENTION_DAYS` | `365` | Days that the [audit log](/operate/audit-log#retention) keeps an entry, between 90 and 3650. |
 | `NYKTUS_INCIDENT_AUTO_CLOSE_DAYS` | `14` | Days without a new event after which the worker [closes an incident](/guides/incidents#inactive-incidents-close-themselves), between 1 and 365, or `0` to close incidents only by triage. |
 | `NYKTUS_EVENT_RETENTION_DAYS` | `180` | Days that [events](/guides/incidents#retention) are kept after they were recorded, and closed incidents with their alerts and deliveries after they closed, between 30 and 3650. |
 
@@ -118,7 +118,7 @@ The redirect URI is `NYKTUS_CONSOLE_URL` followed by `/api/v1/oidc/callback`. Gr
 
 ## `nyktus admin`
 
-The admin commands, such as `nyktus admin reset-password`, use the settings of the console: `NYKTUS_CONSOLE_DATABASE_URL` and `NYKTUS_CONSOLE_URL`, and `NYKTUS_CONSOLE_ADDR` for the default of the URL in development. They do not need the encryption keys.
+The admin commands, such as [`nyktus admin reset-password`](/operate/users#when-no-administrator-can-sign-in), use the settings of the console: `NYKTUS_CONSOLE_DATABASE_URL` and `NYKTUS_CONSOLE_URL`, and `NYKTUS_CONSOLE_ADDR` for the default of the URL in development. They do not need the encryption keys.
 
 ## Encryption keys
 

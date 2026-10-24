@@ -97,6 +97,15 @@ export default defineConfig({
           items: [
             { text: 'Configuration', link: '/operate/configuration' },
             { text: 'Sign-in and sessions', link: '/operate/sign-in' },
+            { text: 'Accounts', link: '/operate/users' },
+          ],
+        },
+        {
+          text: 'Observe',
+          items: [
+            { text: 'Audit log', link: '/operate/audit-log' },
+            { text: 'Logs', link: '/operate/logs' },
+            { text: 'Metrics', link: '/operate/metrics' },
           ],
         },
       ],
