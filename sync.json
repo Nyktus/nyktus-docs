@@ -1,0 +1,10 @@
+{
+  "repository": "Nyktus/nyktus",
+  "ref": "a6688b36d7994047891b6cc3e90f3270d0745649",
+  "files": {
+    "data/openapi.yaml": {
+      "source": "api/openapi.yaml",
+      "sha256": "5d5ed4313e4f696f8f29f04722c72e757dc3aeaa99a0853033074a5832ce85e6"
+    }
+  }
+}

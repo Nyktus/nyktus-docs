@@ -1,0 +1,5429 @@
+# SPDX-FileCopyrightText: The Nyktus Authors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+# This specification is the contract of the console HTTP interface. It is written
+# by hand and kept in sync with the router by a test: every operation must exist in
+# the router with the same method, path and access requirement, and vice versa.
+#
+# Every operation declares who may call it in x-access:
+#   public         no authentication
+#   authenticated  any signed-in user or API key, regardless of permissions
+#   resource:action
+#                  a principal that holds this permission
+#
+# The security requirements name the credentials an operation admits: the
+# session cookie always, and an API key (bearerKey) only where a key can hold
+# the access. A test compares them with the router and the scopes that keys may
+# carry.
+
+openapi: 3.1.0
+
+info:
+  title: Nyktus API
+  summary: Console API of the Nyktus deception platform.
+  description: |
+    API routes live under `/api/v1`. Health endpoints for orchestrators live at the
+    root.
+
+    Every GET operation also answers HEAD with the same access requirement and
+    without a body.
+
+    Every error response uses the same envelope. Server errors carry a generic
+    message and a request ID that correlates them with the server log.
+
+    Browsers authenticate with a session cookie, which `POST /api/v1/session`
+    sets, or, for users of an identity provider, the sign-in that
+    `GET /api/v1/oidc/authorize` starts. Requests that change state and carry an `Origin` header must come from
+    the origin of the console, otherwise they receive `403` with the code `cross_origin`.
+
+    Integrations authenticate with an API key in the header
+    `Authorization: Bearer <key>`. A request with a key authenticates with it
+    alone; other credentials in the header are ignored. A key belongs to the team
+    and holds its scopes, regardless of who created it. Operations that do not
+    list `bearerKey` reject keys with `403`.
+  version: 0.0.0
+  license:
+    name: AGPL-3.0-or-later
+    identifier: AGPL-3.0-or-later
+
+servers:
+  - url: /
+
+tags:
+  - name: health
+    description: Liveness and readiness probes for orchestrators.
+  - name: setup
+    description: Creation of the first administrator of an installation.
+  - name: session
+    description: Sign-in, the session of the caller and sign-out.
+  - name: api-keys
+    description: API keys of the team, managed by administrators.
+  - name: audit
+    description: The audit log of security-relevant actions.
+  - name: users
+    description: Management of accounts by administrators, and their activation.
+  - name: catalog
+    description: The deceptions of the catalog, blueprints of scenarios that ship with Nyktus.
+  - name: honeytokens
+    description: Honeytokens of the team, which raise an event when their URL is requested.
+  - name: honeypots
+    description: Honeypots of the team, network services that a sensor emulates in the monitored network.
+  - name: scenarios
+    description: Scenarios of the team, which group decoys that tell one story.
+  - name: artifacts
+    description: Files that applying a deception rendered, to be placed with its scenario.
+  - name: incidents
+    description: Incidents, which correlate the events of a scenario or of a honeytoken or honeypot that stands alone, and their triage.
+  - name: events
+    description: Recorded requests and queries of honeytokens and sessions of honeypots.
+  - name: alerting
+    description: Channels that alerts are delivered to, managed by administrators.
+  - name: metrics
+    description: The state of the queues, incidents and periodic tasks, for a monitoring system.
+
+paths:
+  /livez:
+    get:
+      operationId: getLiveness
+      summary: Report that the process is running
+      description: Checks no dependencies, so that an orchestrator does not restart the process while the database is down.
+      tags: [health]
+      x-access: public
+      responses:
+        "200":
+          description: The process is running.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Report whether the console can serve requests
+      tags: [health]
+      x-access: public
+      responses:
+        "200":
+          description: The console is ready.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Status"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/setup:
+    post:
+      operationId: createFirstAdministrator
+      summary: Create the first administrator
+      description: |
+        Creates the first administrator, active and with the given password. The
+        request must carry a setup token. While no administrator exists, every
+        console process issues one when it starts and prints a setup URL that
+        contains the token in its fragment, such as
+        `https://nyktus.example.com/setup#token=...`. A token is valid for one
+        hour and can be used once.
+
+        Once an administrator exists, the setup is closed for good, also after a
+        restart. From then on, and for every request whose token is unknown,
+        expired or already used, the operation answers with the same status,
+        headers and body as a route that does not exist. Fields are validated only for a valid token.
+      tags: [setup]
+      x-access: public
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetupRequest"
+      responses:
+        "201":
+          description: The administrator has been created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/sign-in-options:
+    get:
+      operationId: getSignInOptions
+      summary: Return the forms of sign-in that the instance offers
+      description: |
+        Tells the sign-in page what to offer. The answer describes the
+        configuration of the instance and nothing about an account, so it is the
+        same for every caller.
+
+        `password` is `false` only while no account may sign in with a password
+        (`NYKTUS_LOCAL_LOGIN=off`). It is `true` otherwise, also when only
+        administrators may, because naming those would tell an intruder which
+        accounts matter.
+
+        `oidc` is `off` without an identity provider, `available` once the
+        console has reached the provider, and `unavailable` while it has not,
+        for example after a start while the provider was down. A sign-in through
+        it fails with `503` in that case.
+      tags: [session]
+      x-access: public
+      responses:
+        "200":
+          description: The forms of sign-in.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignInOptions"
+
+  /api/v1/session:
+    post:
+      operationId: signIn
+      summary: Sign in with email address and password
+      description: |
+        Starts a session and sets the session cookie. A session cookie that the
+        request already carries ends its session.
+
+        For an account with a TOTP factor, the correct password does not start a
+        session: the response is `202` with a challenge cookie, and
+        `POST /api/v1/session/second-factor` completes the sign-in with a code.
+        The count of failed sign-ins starts again only then.
+
+        Every rejected sign-in receives the same `401`, whether the address is
+        unknown, the password is wrong or the account may not sign in. That
+        includes an account of the identity provider, which has no password, and,
+        while users sign in through an identity provider, by default every
+        account other than an administrator's. Five failed
+        sign-ins in a row lock the account for 15 minutes. Only a request with the
+        correct password learns that the account is locked, through `403` with the
+        code `account_locked`.
+      tags: [session]
+      x-access: public
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignInRequest"
+      responses:
+        "200":
+          description: Signed in. The response sets the session cookie.
+          headers:
+            Set-Cookie:
+              description: The session cookie `__Host-nyktus_session`, with `Secure`, `HttpOnly`, `SameSite=Strict` and `Path=/`.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "202":
+          description: The password is correct, and the account has a second factor. The response sets the challenge cookie.
+          headers:
+            Set-Cookie:
+              description: The challenge cookie `__Host-nyktus_challenge`, with `Secure`, `HttpOnly`, `SameSite=Strict` and `Path=/`. It is valid for five minutes.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecondFactorChallenge"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          description: The email address or the password is wrong, or the account may not sign in.
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: The password is correct, but the account is locked (`account_locked`), or the request comes from another origin (`cross_origin`).
+          headers:
+            Retry-After:
+              description: Seconds until the lock ends. Only sent for a locked account.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    get:
+      operationId: getSession
+      summary: Return the session of the caller
+      description: Returns the signed-in user and when the session ends. A request extends the session up to its maximum age.
+      tags: [session]
+      x-access: authenticated
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The session of the caller.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/SessionRequired"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    delete:
+      operationId: signOut
+      summary: Sign out
+      description: Ends the session of the caller and clears the session cookie.
+      tags: [session]
+      x-access: authenticated
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: Signed out.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/SessionRequired"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/session/password:
+    put:
+      operationId: changePassword
+      summary: Change the password of the caller
+      description: |
+        Replaces the password of the signed-in user, who must give the current
+        password. Every session of the account ends; the response sets a new
+        session cookie in place of the one of the request, so the caller stays
+        signed in. The count of failed sign-ins starts again, and an open
+        password reset link of the account stops working.
+
+        A wrong current password receives `403` with the code `wrong_password`
+        and counts as a failed sign-in: five in a row lock the account for 15
+        minutes. Only a request with the correct current password learns that the
+        account is locked, through `403` with the code `account_locked`. Every
+        attempt is recorded in the audit log as `user.password_change`.
+
+        An account of the identity provider has no password and receives `409`
+        with the code `oidc_account`.
+
+        Only a session can change the password; an API key receives `403`.
+      tags: [session]
+      x-access: authenticated
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "204":
+          description: The password is changed. The response sets the new session cookie.
+          headers:
+            Set-Cookie:
+              description: The session cookie `__Host-nyktus_session`, with `Secure`, `HttpOnly`, `SameSite=Strict` and `Path=/`.
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The current password is wrong (`wrong_password`), the current password is correct but
+            the account is locked (`account_locked`), the request is not made with a session, or the
+            request comes from another origin.
+          headers:
+            Retry-After:
+              description: Seconds until the lock ends. Only sent for a locked account.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/oidc/authorize:
+    get:
+      operationId: beginOIDCSignIn
+      summary: Start a sign-in through the identity provider
+      description: |
+        Sends the browser to the identity provider, which sends it back to
+        `GET /api/v1/oidc/callback`. A browser navigates here; it is not called
+        with `fetch`. The response sets a cookie that binds the sign-in to the
+        browser. The sign-in must complete within ten minutes.
+
+        Until the console has reached the identity provider, for example after
+        a start while the provider was down, the response is `503`. Without a
+        configured identity provider, it is `404`.
+      tags: [session]
+      x-access: public
+      responses:
+        "302":
+          description: The browser goes to the identity provider.
+          headers:
+            Location:
+              description: The authorization endpoint of the provider, with state, nonce and PKCE challenge.
+              schema:
+                type: string
+            Set-Cookie:
+              description: The cookie `__Host-nyktus_oidc`, with `Secure`, `HttpOnly`, `SameSite=Lax` and `Path=/`, valid for ten minutes.
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/oidc/reauthenticate:
+    get:
+      operationId: beginOIDCReauthentication
+      summary: Confirm sensitive actions through the identity provider
+      description: |
+        Sends the browser of a signed-in user of the identity provider to the
+        provider, which asks for the credentials again, and back through
+        `GET /api/v1/oidc/callback` to `return_to`. For the next five minutes,
+        the session may then perform the actions that a local account confirms
+        with its password: creating an API key and removing the second factor
+        of another account. A browser navigates here; it is not called with
+        `fetch`.
+
+        If the provider confirms another user, does not report that it asked for
+        the credentials again (`auth_time`), or the groups of the user no longer
+        give the role of the account, the session stays as it is and the
+        browser returns to `return_to` with `#error=reauthentication`. The
+        attempt is recorded in the audit log as `session.reauthenticate`.
+
+        An account that signs in with a password receives `409` with the code
+        `not_oidc_account`. Without a configured identity provider, the response
+        is `404`; until the console has reached the provider, `503`.
+      tags: [session]
+      x-access: authenticated
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: return_to
+          in: query
+          description: Path of the console to return to, such as `/settings/api-keys`, with an optional query and without a fragment. Defaults to `/`.
+          schema:
+            type: string
+            maxLength: 512
+      responses:
+        "302":
+          description: The browser goes to the identity provider.
+          headers:
+            Location:
+              description: The authorization endpoint of the provider, with `prompt=login` and `max_age=0`.
+              schema:
+                type: string
+            Set-Cookie:
+              description: The cookie `__Host-nyktus_oidc`, as for a sign-in.
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/SessionRequired"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/oidc/callback:
+    get:
+      operationId: completeOIDCSignIn
+      summary: Complete a sign-in through the identity provider
+      description: |
+        The identity provider sends the browser here with a code. The console
+        exchanges the code, verifies the ID token and starts a session. The
+        account is created at the first sign-in; its role follows the groups of
+        the user at the provider with every sign-in.
+
+        The browser always goes on to a page of the console: `/` when signed in,
+        `/sign-in#error=oidc` otherwise. A reauthentication returns to its
+        `return_to`, with `#error=reauthentication` if it failed. The reason of a failure is recorded only
+        in the log and, for an identity that the provider vouched for, in the
+        audit log. Without a configured identity provider, the response is `404`.
+      tags: [session]
+      x-access: public
+      parameters:
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: error
+          in: query
+          description: Set by the provider instead of `code` if the user declined or the provider refused.
+          schema:
+            type: string
+      responses:
+        "303":
+          description: The browser goes on to the console.
+          headers:
+            Location:
+              description: "`/` when signed in, `/sign-in#error=oidc` otherwise; for a reauthentication its `return_to`."
+              schema:
+                type: string
+            Set-Cookie:
+              description: The cleared cookie `__Host-nyktus_oidc` and, when signed in, the session cookie `__Host-nyktus_session`.
+              schema:
+                type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/session/second-factor:
+    post:
+      operationId: completeSignIn
+      summary: Complete a sign-in with the second factor
+      description: |
+        Completes a sign-in that the password started, with a code of the
+        authenticator app or a recovery code, and starts a session. The challenge
+        comes from the cookie that `POST /api/v1/session` set. Each recovery code
+        works once. A code is accepted for 30 seconds before and after its own
+        period, and only once.
+
+        A wrong code receives `401` with the code `invalid_code` and counts as a
+        failed sign-in; the challenge stays valid, so that the user can enter the
+        code again. Five failures in a row, with the password or a code, lock the
+        account for 15 minutes; the challenge then ends, and the response is
+        `403` with the code `account_locked`. A missing, expired or used
+        challenge receives `401` with the code `invalid_challenge`: the user
+        signs in again. So does a challenge of an account whose password or
+        second factor changed meanwhile.
+      tags: [session]
+      x-access: public
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SecondFactorProof"
+      responses:
+        "200":
+          description: Signed in. The response sets the session cookie and clears the challenge cookie.
+          headers:
+            Set-Cookie:
+              description: The session cookie `__Host-nyktus_session` and the cleared challenge cookie.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          description: The challenge is not valid (`invalid_challenge`), or the code is wrong (`invalid_code`).
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "403":
+          description: The account is locked (`account_locked`), or the request comes from another origin (`cross_origin`).
+          headers:
+            Retry-After:
+              description: Seconds until the lock ends. Only sent for a locked account.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/session/totp:
+    post:
+      operationId: beginTOTPSetup
+      summary: Start the setup of a TOTP factor
+      description: |
+        Creates a new TOTP secret for the account of the caller, who confirms
+        the request with their password. The response contains the secret and
+        the `otpauth` URI for an authenticator app; they are shown only once.
+        The factor protects the sign-in only after
+        `POST /api/v1/session/totp/confirmation`, which must follow within ten
+        minutes. A new setup replaces one that was not confirmed.
+
+        A wrong password receives `403` with the code `wrong_password` and
+        counts as a failed sign-in. An account that already has a factor
+        receives `409` with the code `totp_enabled`, and an account of the
+        identity provider, whose second factor the provider manages, `409` with
+        the code `oidc_account`. Only a session can manage the second factor.
+      tags: [session]
+      x-access: authenticated
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordConfirmation"
+      responses:
+        "201":
+          description: The unconfirmed factor.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TOTPSetup"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/SecondFactorForbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    delete:
+      operationId: removeTOTP
+      summary: Remove the TOTP factor of the caller
+      description: |
+        Removes the TOTP factor and the recovery codes of the account of the
+        caller, who confirms with their password and a code or a recovery code.
+        Every session of the account ends; the response sets a new session
+        cookie in place of the one of the request.
+
+        A wrong password receives `403` with the code `wrong_password`, a wrong
+        code `403` with the code `wrong_code`; both count as a failed sign-in.
+        An account without a factor receives `409` with the code
+        `totp_not_enabled`. A user who lost their authenticator and their
+        recovery codes asks an administrator to remove the factor.
+      tags: [session]
+      x-access: authenticated
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SecondFactorConfirmation"
+      responses:
+        "204":
+          description: The factor is removed. The response sets the new session cookie.
+          headers:
+            Set-Cookie:
+              description: The session cookie `__Host-nyktus_session`.
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/SecondFactorForbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/session/totp/confirmation:
+    post:
+      operationId: confirmTOTP
+      summary: Confirm the TOTP factor with a first code
+      description: |
+        Confirms the factor that `POST /api/v1/session/totp` created with a code
+        of the authenticator app. From then on, signing in takes a code. The
+        response contains ten recovery codes, which are shown only once. Every
+        other session of the account ends, because it began without the second
+        factor; the response sets a new session cookie in place of the one of
+        the request.
+
+        A wrong code receives `403` with the code `wrong_code` and counts as a
+        failed sign-in; a locked account cannot confirm (`403` with the code
+        `account_locked`). Without a setup, or after ten minutes, the response
+        is `409` with the code `no_totp_setup`.
+      tags: [session]
+      x-access: authenticated
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TOTPCode"
+      responses:
+        "200":
+          description: The factor is enabled. The response sets the new session cookie.
+          headers:
+            Set-Cookie:
+              description: The session cookie `__Host-nyktus_session`.
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoveryCodes"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/SecondFactorForbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/session/totp/recovery-codes:
+    post:
+      operationId: replaceRecoveryCodes
+      summary: Replace the recovery codes of the caller
+      description: |
+        Replaces the recovery codes of the account of the caller with ten new
+        ones, which are shown only once. The caller confirms with their password
+        and a code or a recovery code, as for removing the factor.
+      tags: [session]
+      x-access: authenticated
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SecondFactorConfirmation"
+      responses:
+        "200":
+          description: The new recovery codes.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoveryCodes"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/SecondFactorForbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/api-keys:
+    get:
+      operationId: listAPIKeys
+      summary: List the API keys of the team
+      description: |
+        Returns the API keys of the team, the newest first, with the
+        administrator who created each, without their secrets. Expired keys
+        are listed until the next key is created. Only a session can manage
+        API keys.
+      tags: [api-keys]
+      x-access: api_keys:read
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The API keys of the team.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIKeyList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The caller lacks the permission, which is recorded in the audit log at most once per user,
+            permission and minute, or the request is not made with a session, which is not recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    post:
+      operationId: createAPIKey
+      summary: Create an API key
+      description: |
+        Creates an API key of the team, which the administrator confirms with
+        their password, because a key outlives the session. The key is shown
+        only in this response; the server keeps only a hash of its secret.
+
+        A key acts with its scopes alone, regardless of the administrator who
+        created it, and stays valid when that account is changed or deleted.
+        The scopes must be distinct permissions that API keys may carry, a
+        scope to write requires the scope to read the same resource, and
+        `scenarios:read` and `artifacts:read` require `honeytokens:read`.
+        `expires_at` is required and at most three
+        years away. The team has at most 50 keys that have not expired (`409`,
+        code `too_many_api_keys`).
+
+        A wrong password receives `403` with the code `wrong_password` and
+        counts as a failed sign-in. New keys, wrong passwords and requests of a
+        locked account are recorded in the audit log as `api_key.create`. Only
+        a session can create API keys. An administrator of the identity
+        provider has no password and omits it: they confirm by signing in at
+        the provider again through `GET /api/v1/oidc/reauthenticate` within the
+        five minutes before, otherwise the response is `403` with the code
+        `reauthentication_required`.
+      tags: [api-keys]
+      x-access: api_keys:write
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAPIKeyRequest"
+      responses:
+        "201":
+          description: The new key.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedAPIKey"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The caller lacks the permission, the password is wrong (`wrong_password`), the password
+            is correct but the account is locked (`account_locked`), an administrator of the identity
+            provider has not signed in there again recently (`reauthentication_required`), the request
+            is not made with a session, or the request comes from another origin.
+          headers:
+            Retry-After:
+              description: Seconds until the lock ends. Only sent for a locked account.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/api-keys/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    delete:
+      operationId: revokeAPIKey
+      summary: Revoke an API key
+      description: |
+        Revokes an API key of the team, for example after it leaked. It stops
+        working with the next request. The revocation is recorded in the audit
+        log as `api_key.revoke`. Only a session can revoke API keys.
+      tags: [api-keys]
+      x-access: api_keys:write
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: The key has been revoked.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The caller lacks the permission, which is recorded in the audit log at most once per user,
+            permission and minute, the request is not made with a session, which is not recorded, or
+            the request comes from another origin.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/audit-entries:
+    get:
+      operationId: listAuditEntries
+      summary: List audit entries
+      description: |
+        Returns audit entries from the newest to the oldest, a page at a time. To
+        read the next page, pass the `next_cursor` of a response as `cursor`.
+        Entries recorded meanwhile do not shift the following pages.
+
+        Entries are ordered by the time they were written, not by the time their
+        transaction committed. An entry of a transaction that took long to
+        commit can appear behind entries a reader has already passed. A client
+        that polls for new entries should therefore read again from a few minutes
+        before its newest entry. Entries with the same time are ordered by their
+        identifier, which makes the order total, not chronological.
+
+        Entries contain personal data, so reads are recorded in the audit log as
+        `audit.read`, at most once per user and minute, and separately for
+        each API key.
+      tags: [audit]
+      x-access: audit:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      parameters:
+        - name: limit
+          in: query
+          description: Number of entries per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: The `next_cursor` of the previous page.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A page of entries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditEntryPage"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/metrics:
+    get:
+      operationId: getMetrics
+      summary: Read the metrics
+      description: |
+        Returns the state of the queues of events and alerts, the incidents that
+        are not closed, the honeypots by whether a sensor reports for them and
+        the periodic tasks of the worker, in the text format
+        of Prometheus, version 0.0.4. Every metric is a gauge with the prefix
+        `nyktus_`. Values are aggregates, and labels name only fixed states and
+        tasks, never a resource, an address or a name.
+
+        Whether incidents are open tells an intruder whether they were noticed,
+        so only administrators and API keys with the scope `metrics:read` read
+        the metrics. Reads are not recorded in the audit log.
+      tags: [metrics]
+      x-access: metrics:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      responses:
+        "200":
+          description: The metrics.
+          content:
+            text/plain; version=0.0.4:
+              schema:
+                type: string
+              example: |
+                # HELP nyktus_event_jobs Jobs of events that wait to be processed.
+                # TYPE nyktus_event_jobs gauge
+                nyktus_event_jobs 0
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/users:
+    get:
+      operationId: listUsers
+      summary: List accounts
+      description: |
+        Returns accounts from the newest to the oldest, a page at a time. To read
+        the next page, pass the `next_cursor` of a response as `cursor`.
+
+        Accounts contain personal data, so reads are recorded in the audit log as
+        `users.read`, at most once per user and minute.
+      tags: [users]
+      x-access: users:read
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: limit
+          in: query
+          description: Number of accounts per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: The `next_cursor` of the previous page.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A page of accounts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPage"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    post:
+      operationId: createUser
+      summary: Create an account
+      description: |
+        Creates a pending account without a password and returns an activation
+        link for it. The link is shown only in this response: pass it on to the
+        user, who sets their own password through it. It is valid for 72 hours
+        and can be used once. Administrators never set or see the password of
+        another user.
+      tags: [users]
+      x-access: users:write
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: The account has been created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedUser"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/users/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getUser
+      summary: Get an account
+      description: |
+        Returns one account. The read is recorded like a read of the list.
+      tags: [users]
+      x-access: users:read
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The account.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    patch:
+      operationId: updateUser
+      summary: Change an account
+      description: |
+        Changes the display name, the role or the status of an account, or
+        removes its TOTP factor. Members that are left out stay unchanged. All
+        changes take effect together or not at all.
+
+        - A change of role or status ends every session of the account.
+        - `status: deactivated` blocks the sign-in and removes an open activation
+          link. `status: active` reactivates a deactivated account and ends a
+          lock after failed sign-ins; an account that never set a password
+          returns to `pending`, unless it signs in through the identity
+          provider. A pending account becomes active only through its
+          activation link.
+        - The role of an account of the identity provider follows its groups
+          there and cannot be changed (`409`, code `oidc_account`).
+        - At least one active administrator must remain, and administrators
+          cannot demote or deactivate their own account (`409`).
+        - `totp_enabled: false` removes the TOTP factor and the recovery codes,
+          for a user who lost both, and ends every session of the account. The
+          administrator confirms it with their own `password`: a wrong one
+          receives `403` with the code `wrong_password` and counts as a failed
+          sign-in of the administrator; while their account is locked, only the
+          correct password learns it (`403` with the code `account_locked`).
+          The audit log records every attempt as `user.totp_disable`. Only a
+          session can remove a factor (`403`). Administrators remove their own
+          factor with `DELETE /api/v1/session/totp` (`409`). An administrator
+          of the identity provider omits the password and confirms by signing
+          in at the provider again through `GET /api/v1/oidc/reauthenticate`
+          within the five minutes before, otherwise the response is `403` with
+          the code `reauthentication_required`.
+
+        The audit log records the names of the changed fields, not their values.
+      tags: [users]
+      x-access: users:write
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: The account after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The caller lacks the permission, the request comes from another origin, a second factor is
+            removed with an API key (`forbidden`), the password of the administrator is wrong
+            (`wrong_password`), it is correct but their account is locked (`account_locked`), or an
+            administrator of the identity provider has not signed in there again recently
+            (`reauthentication_required`).
+          headers:
+            Retry-After:
+              description: Seconds until the lock ends. Only sent for a locked account.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    delete:
+      operationId: deleteUser
+      summary: Delete an account
+      description: |
+        Deletes an account with its sessions and its activation link. Audit
+        entries of the account remain readable. At least one active
+        administrator must remain, and administrators cannot delete their own
+        account (`409`).
+      tags: [users]
+      x-access: users:write
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: The account has been deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/users/{id}/activation-link:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: createActivationLink
+      summary: Create a new activation link
+      description: |
+        Returns a new activation link for a pending account, for example after
+        the previous one expired. The previous link stops working. The link is
+        shown only in this response.
+      tags: [users]
+      x-access: users:write
+      security:
+        - sessionCookie: []
+      responses:
+        "201":
+          description: The new activation link.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivationLink"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/users/{id}/password-reset-link:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: createPasswordResetLink
+      summary: Create a password reset link
+      description: |
+        Returns a password reset link for an active account, also a locked one,
+        to pass on to its user. The previous link of the account stops working.
+        The link is shown only in this response.
+
+        Creating the link changes nothing else: the password and the sessions of
+        the account stay valid until the link is used. An account of the
+        identity provider has no password (`409`, code `oidc_account`).
+      tags: [users]
+      x-access: users:write
+      security:
+        - sessionCookie: []
+      responses:
+        "201":
+          description: The new password reset link.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordResetLink"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/activation:
+    post:
+      operationId: activateUser
+      summary: Activate an account
+      description: |
+        Sets the password of a pending account and makes it active. The request
+        must carry the token from the fragment of the activation link, such as
+        `https://nyktus.example.com/activate#token=...`. The activation does not
+        sign in.
+
+        For every request whose token is unknown, expired or already used, the
+        operation answers with the same status, headers and body as a route that
+        does not exist. The password is validated only for a valid token.
+      tags: [users]
+      x-access: public
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivationRequest"
+      responses:
+        "200":
+          description: The account is active.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/password-reset:
+    post:
+      operationId: resetPassword
+      summary: Reset a password
+      description: |
+        Sets a new password for an active account. The request must carry the
+        token from the fragment of the password reset link, such as
+        `https://nyktus.example.com/reset-password#token=...`. Every session of
+        the account ends, and so does a lock after failed sign-ins. The reset
+        does not sign in.
+
+        For every request whose token is unknown, expired, already used or
+        issued as an activation link, the operation answers with the same
+        status, headers and body as a route that does not exist. The password
+        is validated only for a valid token.
+      tags: [users]
+      x-access: public
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetRequest"
+      responses:
+        "200":
+          description: The password is set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "403":
+          $ref: "#/components/responses/CrossOrigin"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/catalog/deceptions:
+    get:
+      operationId: listCatalogDeceptions
+      summary: List the deceptions of the catalog
+      description: |
+        Returns every deception of the catalog, ordered by identifier. The
+        catalog ships with Nyktus and is the same in every installation, so
+        the list is complete and not paged, and it holds no inventory.
+      tags: [catalog]
+      x-access: catalog:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      parameters:
+        - name: lang
+          in: query
+          description: The language of the texts. Without it, they are English.
+          schema:
+            type: string
+            enum: [en, de]
+      responses:
+        "200":
+          description: The deceptions of the catalog.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogDeceptionList"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/catalog/deceptions/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+    get:
+      operationId: getCatalogDeception
+      summary: Get a deception of the catalog
+      description: |
+        Returns a deception with the honeytokens that applying it creates, the
+        values of the persona that it asks for, the secrets that it generates
+        and the artifacts that it renders.
+      tags: [catalog]
+      x-access: catalog:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      parameters:
+        - name: lang
+          in: query
+          description: The language of the texts. Without it, they are English.
+          schema:
+            type: string
+            enum: [en, de]
+      responses:
+        "200":
+          description: The deception.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogDeception"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+
+  /api/v1/catalog/deceptions/{id}/apply:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+    post:
+      operationId: applyCatalogDeception
+      summary: Apply a deception of the catalog
+      description: |
+        Creates a scenario from a deception: its honeytokens, which join the
+        scenario, its artifacts, rendered with the URLs and names of those
+        honeytokens, the values of the persona and new random secrets, and its
+        guide in the chosen language. Everything is created in one transaction:
+        an error leaves nothing behind. The scenario is a snapshot; a later
+        change of the catalog does not change it.
+
+        A DNS honeytoken is named under the first zone of the DNS role in the
+        artifacts. Without zones, a deception with a DNS honeytoken receives
+        `422` with the code `dns_not_configured`. An application whose values
+        would make an artifact name the product or what it is, such as a zone
+        or a value of the persona that contains "canary", receives `422` with
+        the code `artifact_reveals_decoy`.
+
+        The permission `scenarios:write` covers the honeytokens and artifacts
+        that applying creates. The audit log records each honeytoken as
+        `honeytoken.create`, the scenario as `scenario.create` and each
+        artifact as `artifact.create`.
+      tags: [catalog, scenarios]
+      x-access: scenarios:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplyDeceptionRequest"
+      responses:
+        "201":
+          description: The scenario with its honeytokens and artifacts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppliedDeception"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          description: |
+            The deception has a `dns` honeytoken, but the console knows no zone of the DNS role
+            (`dns_not_configured`), or a value would make an artifact reveal what it is
+            (`artifact_reveals_decoy`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+  /api/v1/honeytokens:
+    get:
+      operationId: listHoneytokens
+      summary: List honeytokens
+      description: |
+        Returns honeytokens from the newest to the oldest, a page at a time. To
+        read the next page, pass the `next_cursor` of a response as `cursor`,
+        with the same filters.
+
+        Honeytokens are part of the inventory: whoever reads them knows which
+        URLs to avoid. Give integrations that do not manage honeytokens keys
+        without the scope `honeytokens:read`.
+      tags: [honeytokens]
+      x-access: honeytokens:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      parameters:
+        - name: limit
+          in: query
+          description: Number of honeytokens per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: The `next_cursor` of the previous page.
+          schema:
+            type: string
+        - name: type
+          in: query
+          description: Lists only honeytokens of this type.
+          schema:
+            type: string
+            enum: [web_url, web_image, dns]
+        - name: enabled
+          in: query
+          description: Lists only enabled (`true`) or disabled (`false`) honeytokens.
+          schema:
+            type: string
+            enum: ["true", "false"]
+        - name: scenario_id
+          in: query
+          description: Lists only the honeytokens of this scenario.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: A page of honeytokens.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HoneytokenPage"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    post:
+      operationId: createHoneytoken
+      summary: Create a honeytoken
+      description: |
+        Creates a honeytoken with a new trigger value of 128 random bits. Place
+        its `trigger_url`, or for a `dns` one of its `trigger_names`, where an
+        attacker would find it. The trigger value cannot be changed: to replace
+        a URL or name that has been exposed, create a new honeytoken and delete
+        the old one.
+
+        A `dns` honeytoken needs the zones of the DNS role. Without them, the
+        request receives `422` with the code `dns_not_configured`.
+
+        The audit log records the creation as `honeytoken.create`.
+      tags: [honeytokens]
+      x-access: honeytokens:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHoneytokenRequest"
+      responses:
+        "201":
+          description: The honeytoken has been created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Honeytoken"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          description: The request creates a `dns` honeytoken, but the console knows no zone of the DNS role (`dns_not_configured`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/honeytokens/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getHoneytoken
+      summary: Get a honeytoken
+      tags: [honeytokens]
+      x-access: honeytokens:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      responses:
+        "200":
+          description: The honeytoken.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Honeytoken"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    patch:
+      operationId: updateHoneytoken
+      summary: Change a honeytoken
+      description: |
+        Changes the name, the notes, the state, the redirect, the techniques or
+        the severity of a honeytoken. Members that are left out stay unchanged. The type and
+        the trigger value cannot be changed. `redirect_url: null` removes the
+        redirect.
+
+        The audit log records the names of the changed fields as
+        `honeytoken.update`, not their values. A request that changes no value
+        is not recorded.
+      tags: [honeytokens]
+      x-access: honeytokens:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateHoneytokenRequest"
+      responses:
+        "200":
+          description: The honeytoken after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Honeytoken"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    delete:
+      operationId: deleteHoneytoken
+      summary: Delete a honeytoken
+      description: |
+        Deletes a honeytoken. Its URL stops raising events, and the trigger
+        answers it like any unknown URL. Remove the placed URL as well, so that
+        it does not mislead your own team. The audit log records the deletion as
+        `honeytoken.delete`.
+      tags: [honeytokens]
+      x-access: honeytokens:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      responses:
+        "204":
+          description: The honeytoken has been deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/honeytokens/{id}/scenario:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: assignHoneytokenScenario
+      summary: Assign a honeytoken to a scenario
+      description: |
+        Assigns a honeytoken that stands alone to a scenario. From then on,
+        its events are correlated into the open incident of the scenario. An
+        open incident of the honeytoken itself stays open until it is
+        triaged or closes after its inactivity. Assigning a honeytoken to its
+        own scenario again changes nothing.
+
+        A honeytoken that belongs to another scenario receives `409` with the
+        code `honeytoken_in_scenario`: remove it from that scenario first, so
+        that nothing takes a honeytoken from a scenario by mistake. A scenario
+        that does not exist receives `422` with the code `scenario_not_found`.
+
+        The audit log records the change as `honeytoken.update` with the field
+        `scenario_id`. A request that changes nothing is not recorded.
+      tags: [honeytokens]
+      x-access: honeytokens:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignScenarioRequest"
+      responses:
+        "200":
+          description: The honeytoken after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Honeytoken"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The honeytoken belongs to another scenario (`honeytoken_in_scenario`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          description: The scenario does not exist (`scenario_not_found`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    delete:
+      operationId: detachHoneytokenScenario
+      summary: Remove a honeytoken from its scenario
+      description: |
+        Removes a honeytoken from its scenario. The honeytoken stays and
+        stands alone: its next events open an incident of their own. A
+        honeytoken that stands alone stays as it is.
+
+        The audit log records the change as `honeytoken.update` with the field
+        `scenario_id`. A request that changes nothing is not recorded.
+      tags: [honeytokens]
+      x-access: honeytokens:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      responses:
+        "200":
+          description: The honeytoken after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Honeytoken"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/honeypots:
+    get:
+      operationId: listHoneypots
+      summary: List honeypots
+      description: |
+        Returns honeypots from the newest to the oldest, a page at a time. To
+        read the next page, pass the `next_cursor` of a response as `cursor`,
+        with the same filters.
+
+        Honeypots are part of the inventory: whoever reads them knows which
+        services to avoid. Give integrations that do not manage honeypots keys
+        without the scope `honeypots:read`.
+      tags: [honeypots]
+      x-access: honeypots:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      parameters:
+        - name: limit
+          in: query
+          description: Number of honeypots per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: The `next_cursor` of the previous page.
+          schema:
+            type: string
+        - name: service
+          in: query
+          description: Lists only honeypots of this service.
+          schema:
+            type: string
+            enum: [ssh, telnet, postgres, ldap]
+        - name: enabled
+          in: query
+          description: Lists only enabled (`true`) or disabled (`false`) honeypots.
+          schema:
+            type: string
+            enum: ["true", "false"]
+        - name: scenario_id
+          in: query
+          description: Lists only the honeypots of this scenario.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: A page of honeypots.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HoneypotPage"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    post:
+      operationId: createHoneypot
+      summary: Create a honeypot
+      description: |
+        Creates a honeypot with a new secret of 256 random bits, which the
+        sensor presents to the trigger. The secret is shown only in this
+        response, together with the entry for the configuration file of the
+        sensor (`sensor_config`); the server keeps only a hash of it. To
+        replace a lost or exposed secret, use
+        `POST /api/v1/honeypots/{id}/secret`.
+
+        The service cannot be changed, because the sensor is configured for
+        it: to emulate another service, create a new honeypot.
+
+        The audit log records the creation as `honeypot.create`.
+      tags: [honeypots]
+      x-access: honeypots:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHoneypotRequest"
+      responses:
+        "201":
+          description: "The honeypot has been created. It is sent with `Cache-Control: no-store`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedHoneypot"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/honeypots/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getHoneypot
+      summary: Get a honeypot
+      tags: [honeypots]
+      x-access: honeypots:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      responses:
+        "200":
+          description: The honeypot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Honeypot"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    patch:
+      operationId: updateHoneypot
+      summary: Change a honeypot
+      description: |
+        Changes the name, the notes, the state, the techniques or the severity
+        of a honeypot. Members that are left out stay unchanged. The service
+        and the secret cannot be changed here.
+
+        The audit log records the names of the changed fields as
+        `honeypot.update`, not their values. A request that changes no value
+        is not recorded.
+      tags: [honeypots]
+      x-access: honeypots:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateHoneypotRequest"
+      responses:
+        "200":
+          description: The honeypot after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Honeypot"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    delete:
+      operationId: deleteHoneypot
+      summary: Delete a honeypot
+      description: |
+        Deletes a honeypot. Its secret stops working. Stop the honeypot on the
+        sensor as well, so that it does not mislead your own team. The audit
+        log records the deletion as `honeypot.delete`.
+      tags: [honeypots]
+      x-access: honeypots:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      responses:
+        "204":
+          description: The honeypot has been deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/honeypots/{id}/secret:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: replaceHoneypotSecret
+      summary: Replace the secret of a honeypot
+      description: |
+        Gives a honeypot a new secret of 256 random bits. The old secret stops
+        working at once, so a sensor that still uses it is shut out until it
+        is configured with the new one. The new secret is shown only in this
+        response, together with the entry for the configuration file of the
+        sensor (`sensor_config`).
+
+        The honeypot forgets what its sensor last reported: its `status` is
+        `never` until a sensor reports with the new secret.
+
+        The audit log records the change as `honeypot.update` with the field
+        `secret`, never its value.
+      tags: [honeypots]
+      x-access: honeypots:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      responses:
+        "200":
+          description: "The honeypot with its new secret. It is sent with `Cache-Control: no-store`."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreatedHoneypot"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/honeypots/{id}/scenario:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: assignHoneypotScenario
+      summary: Assign a honeypot to a scenario
+      description: |
+        Assigns a honeypot that stands alone to a scenario. Assigning a
+        honeypot to its own scenario again changes nothing.
+
+        A honeypot that belongs to another scenario receives `409` with the
+        code `honeypot_in_scenario`: remove it from that scenario first, so
+        that nothing takes a honeypot from a scenario by mistake. A scenario
+        that does not exist receives `422` with the code `scenario_not_found`.
+
+        The audit log records the change as `honeypot.update` with the field
+        `scenario_id`. A request that changes nothing is not recorded.
+      tags: [honeypots]
+      x-access: honeypots:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssignScenarioRequest"
+      responses:
+        "200":
+          description: The honeypot after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Honeypot"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The honeypot belongs to another scenario (`honeypot_in_scenario`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          description: The scenario does not exist (`scenario_not_found`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    delete:
+      operationId: detachHoneypotScenario
+      summary: Remove a honeypot from its scenario
+      description: |
+        Removes a honeypot from its scenario. The honeypot stays and stands
+        alone. A honeypot that stands alone stays as it is.
+
+        The audit log records the change as `honeypot.update` with the field
+        `scenario_id`. A request that changes nothing is not recorded.
+      tags: [honeypots]
+      x-access: honeypots:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      responses:
+        "200":
+          description: The honeypot after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Honeypot"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/scenarios:
+    get:
+      operationId: listScenarios
+      summary: List scenarios
+      description: |
+        Returns scenarios from the newest to the oldest, a page at a time. To
+        read the next page, pass the `next_cursor` of a response as `cursor`.
+        The honeytokens of a scenario are listed by
+        `GET /api/v1/honeytokens?scenario_id=`.
+
+        Scenarios are part of the inventory: their names and notes tell where
+        decoys are placed. Give integrations that do not manage them keys
+        without the scope `scenarios:read`.
+      tags: [scenarios]
+      x-access: scenarios:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      parameters:
+        - name: limit
+          in: query
+          description: Number of scenarios per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: The `next_cursor` of the previous page.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A page of scenarios.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScenarioPage"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    post:
+      operationId: createScenario
+      summary: Create a scenario
+      description: |
+        Creates a scenario without resources. Honeytokens join it through
+        `PUT /api/v1/honeytokens/{id}/scenario`.
+
+        The audit log records the creation as `scenario.create`.
+      tags: [scenarios]
+      x-access: scenarios:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateScenarioRequest"
+      responses:
+        "201":
+          description: The scenario has been created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Scenario"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/scenarios/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getScenario
+      summary: Get a scenario
+      tags: [scenarios]
+      x-access: scenarios:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      responses:
+        "200":
+          description: The scenario.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Scenario"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    patch:
+      operationId: updateScenario
+      summary: Change a scenario
+      description: |
+        Changes the name, the notes or the Engage activities of a scenario.
+        Members that are left out stay unchanged; `engage_activities: []`
+        removes the activities. The deception that a scenario was created from
+        cannot be changed, and resources join and leave a scenario through
+        operations of their own.
+
+        The audit log records the names of the changed fields as
+        `scenario.update`, not their values. A request that changes no value
+        is not recorded.
+      tags: [scenarios]
+      x-access: scenarios:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateScenarioRequest"
+      responses:
+        "200":
+          description: The scenario after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Scenario"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    delete:
+      operationId: deleteScenario
+      summary: Delete a scenario
+      description: |
+        Deletes a scenario. The parameters `honeytokens`, `honeypots` and
+        `artifacts` choose what happens to its honeytokens, honeypots and
+        artifacts: `keep` removes them from the scenario, and they stand
+        alone; `delete` deletes them with it. Events and incidents remain
+        either way. `honeypots=delete` also requires the permission
+        `honeypots:write`, because only that permission puts a honeypot into
+        a scenario; without it, the request receives `403`.
+
+        The audit log records the deletion as `scenario.delete`, and each
+        honeytoken, honeypot and artifact as `honeytoken.update`,
+        `honeypot.update` or `artifact.update` with the field `scenario_id`,
+        or as `honeytoken.delete`, `honeypot.delete` or `artifact.delete`, all
+        in one transaction.
+      tags: [scenarios]
+      x-access: scenarios:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      parameters:
+        - name: honeytokens
+          in: query
+          description: |
+            What happens to the honeytokens of the scenario: `keep` (the
+            default) leaves them alone, `delete` deletes them.
+          schema:
+            type: string
+            enum: [keep, delete]
+        - name: honeypots
+          in: query
+          description: |
+            What happens to the honeypots of the scenario: `keep` (the
+            default) leaves them alone, `delete` deletes them.
+          schema:
+            type: string
+            enum: [keep, delete]
+        - name: artifacts
+          in: query
+          description: |
+            What happens to the artifacts of the scenario: `keep` (the
+            default) leaves them alone, `delete` deletes them.
+          schema:
+            type: string
+            enum: [keep, delete]
+      responses:
+        "204":
+          description: The scenario has been deleted.
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/scenarios/{id}/guide:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getScenarioGuide
+      summary: Get the guide of a scenario
+      description: |
+        Returns the guide that applying the deception rendered for the
+        scenario, in Markdown, in the language of the application. It names
+        the honeytokens and values of the scenario and tells where to place
+        its artifacts and how to test them. A scenario put together by hand
+        has no guide and receives `404`.
+      tags: [scenarios]
+      x-access: scenarios:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      responses:
+        "200":
+          description: The guide.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScenarioGuide"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/artifacts:
+    get:
+      operationId: listArtifacts
+      summary: List artifacts
+      description: |
+        Returns artifacts from the newest to the oldest, a page at a time,
+        without their content. To read the next page, pass the `next_cursor`
+        of a response as `cursor`, with the same filter.
+
+        Artifacts are part of the inventory: their content names the URLs and
+        host names of honeytokens. Give integrations that do not place decoys
+        keys without the scope `artifacts:read`.
+      tags: [artifacts]
+      x-access: artifacts:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      parameters:
+        - name: limit
+          in: query
+          description: Number of artifacts per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: The `next_cursor` of the previous page.
+          schema:
+            type: string
+        - name: scenario_id
+          in: query
+          description: Only the artifacts of this scenario.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: A page of artifacts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArtifactPage"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/artifacts/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getArtifact
+      summary: Get an artifact
+      description: Returns an artifact without its content.
+      tags: [artifacts]
+      x-access: artifacts:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      responses:
+        "200":
+          description: The artifact.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artifact"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    patch:
+      operationId: updateArtifact
+      summary: Change the placement notes of an artifact
+      description: |
+        Sets where the artifact was placed. Nothing else of an artifact can be
+        changed: its content, name and format are what applying the deception
+        rendered, and it leaves its scenario only when the scenario is deleted.
+
+        The audit log records the change as `artifact.update` with the field
+        `placement_notes`, not its value. A request that changes nothing is not
+        recorded.
+      tags: [artifacts]
+      x-access: artifacts:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateArtifactRequest"
+      responses:
+        "200":
+          description: The artifact after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Artifact"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    delete:
+      operationId: deleteArtifact
+      summary: Delete an artifact
+      description: |
+        Deletes an artifact. Remove the file from where it was placed as well.
+        The audit log records the deletion as `artifact.delete`.
+      tags: [artifacts]
+      x-access: artifacts:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      responses:
+        "204":
+          description: The artifact has been deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/artifacts/{id}/content:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: downloadArtifact
+      summary: Download an artifact
+      description: |
+        Returns the content of an artifact as a file to save
+        (`Content-Disposition: attachment` with its `file_name`), with the
+        media type of its format, `X-Content-Type-Options: nosniff`,
+        `Content-Security-Policy: default-src 'none'; sandbox` and
+        `Cache-Control: no-store`, so that a browser never renders an artifact
+        in the origin of the console.
+
+        The audit log records downloads as `artifacts.read`, at most once per
+        user or API key and minute, without naming the artifact.
+      tags: [artifacts]
+      x-access: artifacts:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      responses:
+        "200":
+          description: The content of the artifact.
+          headers:
+            Content-Disposition:
+              description: '`attachment` with the `file_name` of the artifact.'
+              schema:
+                type: string
+          content:
+            text/plain:
+              schema:
+                type: string
+            text/markdown:
+              schema:
+                type: string
+            text/html:
+              schema:
+                type: string
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/incidents:
+    get:
+      operationId: listIncidents
+      summary: List incidents
+      description: |
+        Returns incidents from the most recently opened to the oldest, a page at
+        a time. To read the next page, pass the `next_cursor` of a response as
+        `cursor`, with the same filters.
+      tags: [incidents]
+      x-access: incidents:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      parameters:
+        - name: limit
+          in: query
+          description: Number of incidents per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: The `next_cursor` of the previous page.
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: |
+            Lists only incidents with one of these statuses, separated by
+            commas, such as `open,acknowledged` for every incident that is not
+            closed.
+          schema:
+            type: string
+            pattern: "^(open|acknowledged|closed)(,(open|acknowledged|closed))*$"
+        - name: resource_id
+          in: query
+          description: |
+            Lists only the incidents of this scenario, or of this honeytoken or
+            honeypot while it stood alone. The events of a honeytoken or honeypot
+            in a scenario belong to the incidents of the scenario.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: A page of incidents.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IncidentPage"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/incidents/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getIncident
+      summary: Get an incident
+      tags: [incidents]
+      x-access: incidents:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      responses:
+        "200":
+          description: The incident.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    patch:
+      operationId: triageIncident
+      summary: Triage an incident
+      description: |
+        Changes the status, the notes, or the overrides of the severity and the
+        techniques of an incident. Members that are left out stay unchanged;
+        `null` removes an override. The status only moves forward, from `open`
+        over `acknowledged` to `closed`, and may skip `acknowledged`. A request
+        that would move it back, such as opening a closed incident again,
+        receives `409` with the code `invalid_state`. Notes and overrides can
+        still be changed after an incident is closed.
+
+        The audit log records the names of the changed fields as
+        `incident.update`, not their values. A request that changes no value
+        is not recorded.
+      tags: [incidents]
+      x-access: incidents:write
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TriageIncidentRequest"
+      responses:
+        "200":
+          description: The incident after the change.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/ForbiddenWrite"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The change would move the status of the incident back (`invalid_state`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/events:
+    get:
+      operationId: listEvents
+      summary: List events
+      description: |
+        Returns events from the most recently recorded to the oldest, a page
+        at a time. To read the next page, pass the `next_cursor` of a response
+        as `cursor`, with the same filter. The order follows `recorded_at`, not
+        `occurred_at`: a DNS query can be recorded up to five minutes after it
+        arrived, and is listed when it was recorded. The events of a honeytoken
+        or honeypot are among those of its incidents, or of the incidents of its
+        scenario, which also hold the events of the other honeytokens and
+        honeypots of the scenario; `resource_id` names the resource of each.
+
+        Events contain personal data, such as the addresses of clients and the
+        user names that an attacker typed into a honeypot. Every
+        read is recorded in the audit log as `events.read`, at most once per
+        user or API key and minute.
+      tags: [events]
+      x-access: events:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      parameters:
+        - name: limit
+          in: query
+          description: Number of events per page.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          description: The `next_cursor` of the previous page.
+          schema:
+            type: string
+        - name: incident_id
+          in: query
+          description: Lists only the events of this incident.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: A page of events.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventPage"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/events/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getEvent
+      summary: Get an event
+      description: |
+        Events contain personal data. Every read is recorded in the audit log
+        as `events.read`, at most once per user or API key and minute.
+      tags: [events]
+      x-access: events:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      responses:
+        "200":
+          description: The event.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/alert-channels:
+    get:
+      operationId: listAlertChannels
+      summary: List the alert channels
+      description: |
+        Returns the channels that alerts are delivered to, ordered by name,
+        without their URLs and header values. `target` shows the scheme, host
+        and port of the URL instead; a channel of the type `email` shows its
+        `recipients`. Only a session can manage alert channels.
+      tags: [alerting]
+      x-access: alert_channels:read
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The alert channels.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannelList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The caller lacks the permission, which is recorded in the audit log at most once per user,
+            permission and minute, or the request is not made with a session, which is not recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    post:
+      operationId: createAlertChannel
+      summary: Create an alert channel
+      description: |
+        Creates a channel that every alert is delivered to, which the
+        administrator confirms with their password, because a channel decides
+        where alerts go. The URL, and for a webhook the value of an optional
+        header, are secrets: they are stored encrypted and never returned,
+        also not in this response.
+
+        The URL must be an `https` URL whose host resolves to public addresses
+        only, or to addresses within `NYKTUS_ALERTING_ALLOWED_NETWORKS`;
+        otherwise the response is `422` with the code `target_not_allowed`,
+        which does not tell an internal target from one that does not resolve.
+        A header is only allowed for a `webhook` (`422`, code
+        `header_not_allowed`). A channel of the type `email` has `recipients`
+        instead of a URL (`422`, codes `url_not_allowed` and
+        `recipients_not_allowed`); they are no secret and are returned. Names are unique (`409`, code `name_taken`), and
+        an installation has at most 20 channels (`409`, code
+        `too_many_alert_channels`).
+
+        A wrong password receives `403` with the code `wrong_password` and
+        counts as a failed sign-in. New channels, wrong passwords and requests
+        of a locked account are recorded in the audit log as
+        `alert_channel.create`. An administrator of the identity provider has
+        no password and omits it: they confirm by signing in at the provider
+        again through `GET /api/v1/oidc/reauthenticate` within the five minutes
+        before, otherwise the response is `403` with the code
+        `reauthentication_required`.
+      tags: [alerting]
+      x-access: alert_channels:write
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAlertChannelRequest"
+      responses:
+        "201":
+          description: The new channel.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannel"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The caller lacks the permission, the password is wrong (`wrong_password`), the password
+            is correct but the account is locked (`account_locked`), an administrator of the identity
+            provider has not signed in there again recently (`reauthentication_required`), the request
+            is not made with a session, or the request comes from another origin.
+          headers:
+            Retry-After:
+              description: Seconds until the lock ends. Only sent for a locked account.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "409":
+          $ref: "#/components/responses/AlertChannelConflict"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/AlertChannelUnprocessable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/alert-channels/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getAlertChannel
+      summary: Get an alert channel
+      description: Returns a channel without its URL and header value.
+      tags: [alerting]
+      x-access: alert_channels:read
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The channel.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannel"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The caller lacks the permission, which is recorded in the audit log at most once per user,
+            permission and minute, or the request is not made with a session, which is not recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    patch:
+      operationId: updateAlertChannel
+      summary: Change an alert channel
+      description: |
+        Changes the name of a channel, enables or disables it, or replaces its
+        URL, header or recipients. The type never changes. A new URL is checked
+        as on creation. `header` replaces the header of a webhook; null removes
+        it. `recipients` replaces the recipients of a channel of the type
+        `email`.
+
+        Every change other than a new `name` decides where alerts go, what
+        authenticates them, or whether they go at all, and is confirmed with
+        the `password` of the administrator, as on creation. A missing password
+        counts as a wrong one (`403`, code `wrong_password`). Changes are
+        recorded in the audit log as
+        `alert_channel.update` with the names of the changed fields; a new URL
+        or header always counts as changed, because the stored one cannot be
+        read to compare.
+      tags: [alerting]
+      x-access: alert_channels:write
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAlertChannelRequest"
+      responses:
+        "200":
+          description: The changed channel.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertChannel"
+        "400":
+          $ref: "#/components/responses/InvalidRequest"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The caller lacks the permission, the password is wrong or missing (`wrong_password`), the
+            password is correct but the account is locked (`account_locked`), an administrator of the identity
+            provider has not signed in there again recently (`reauthentication_required`), the request
+            is not made with a session, or the request comes from another origin.
+          headers:
+            Retry-After:
+              description: Seconds until the lock ends. Only sent for a locked account.
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/AlertChannelConflict"
+        "413":
+          $ref: "#/components/responses/BodyTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/AlertChannelUnprocessable"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+    delete:
+      operationId: deleteAlertChannel
+      summary: Delete an alert channel
+      description: |
+        Deletes a disabled channel with its secrets. An enabled channel
+        receives `409` with the code `alert_channel_enabled`: disabling it is
+        the change that stops its alerts, and that change is confirmed with a
+        password. The deletion is recorded in the audit log as
+        `alert_channel.delete`.
+      tags: [alerting]
+      x-access: alert_channels:write
+      security:
+        - sessionCookie: []
+      responses:
+        "204":
+          description: The channel has been deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The caller lacks the permission, which is recorded in the audit log at most once per user,
+            permission and minute, the request is not made with a session, which is not recorded, or
+            the request comes from another origin.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/AlertChannelConflict"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/alert-channels/{id}/test:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: testAlertChannel
+      summary: Send a test to an alert channel
+      description: |
+        Asks the worker to send a test message to the channel, also to a
+        disabled one, so that it can be tried before it receives alerts. The
+        response names the new delivery; read its outcome with
+        `GET /api/v1/alert-deliveries/{id}` once the worker has sent it. A test
+        is attempted once. A channel has at most one test waiting (`409`, code
+        `test_pending`). The request is recorded in the audit log as
+        `alert_channel.test`.
+      tags: [alerting]
+      x-access: alert_channels:write
+      security:
+        - sessionCookie: []
+      responses:
+        "202":
+          description: The test waits for the worker.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertDelivery"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The caller lacks the permission, which is recorded in the audit log at most once per user,
+            permission and minute, the request is not made with a session, which is not recorded, or
+            the request comes from another origin.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: A test of the channel waits for the worker (`test_pending`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/alert-deliveries/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: getAlertDelivery
+      summary: Get a delivery of an alert or test
+      description: |
+        Returns the state of a delivery, such as the outcome of a test. The
+        last attempt is described by its status code and the class of its
+        failure; responses and network errors are never stored.
+      tags: [alerting]
+      x-access: alert_channels:read
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The delivery.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertDelivery"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The caller lacks the permission, which is recorded in the audit log at most once per user,
+            permission and minute, or the request is not made with a session, which is not recorded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/alert-deliveries/{id}/retry:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: retryAlertDelivery
+      summary: Retry a dead delivery
+      description: |
+        Makes a dead delivery of an alert pending again, with a new count of
+        attempts, for example after the receiver was fixed. Only dead
+        deliveries of alerts can be retried (`409`, code `delivery_not_dead`);
+        a test is requested anew instead. The retry is recorded in the audit
+        log as `alert_delivery.retry`.
+      tags: [alerting]
+      x-access: alert_channels:write
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: The delivery, pending again.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertDelivery"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: |
+            The caller lacks the permission, which is recorded in the audit log at most once per user,
+            permission and minute, the request is not made with a session, which is not recorded, or
+            the request comes from another origin.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The delivery is not a dead delivery of an alert (`delivery_not_dead`).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+  /api/v1/incidents/{id}/deliveries:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: listIncidentDeliveries
+      summary: List the deliveries of the alert of an incident
+      description: |
+        Returns the deliveries of the alert of the incident, one for every
+        channel that was enabled when the incident opened, ordered by the name
+        of the channel. The list is empty if no channel was enabled then.
+      tags: [incidents]
+      x-access: incidents:read
+      security:
+        - sessionCookie: []
+        - bearerKey: []
+      responses:
+        "200":
+          description: The deliveries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertDeliveryList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          $ref: "#/components/responses/Unavailable"
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: __Host-nyktus_session
+      description: Session token set by `POST /api/v1/session`.
+    bearerKey:
+      type: http
+      scheme: bearer
+      description: |
+        API key created with `POST /api/v1/api-keys`, in the form
+        `nyk_` followed by 84 characters of lowercase base32.
+
+  schemas:
+    Status:
+      type: object
+      additionalProperties: false
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: ok
+
+    SetupRequest:
+      type: object
+      additionalProperties: false
+      required: [token, email, display_name, password]
+      properties:
+        token:
+          type: string
+          description: The setup token from the fragment of the setup URL.
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: Sign-in address. It is stored in lower case.
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Name shown in the console and the audit log. Printable characters without leading or trailing spaces.
+        password:
+          type: string
+          format: password
+          minLength: 12
+          maxLength: 128
+          description: Counted in Unicode code points after NFC normalization.
+
+    SignInOptions:
+      type: object
+      additionalProperties: false
+      required: [password, oidc]
+      properties:
+        password:
+          type: boolean
+          description: Whether the page offers the form for the email address and password.
+        oidc:
+          type: string
+          enum: [off, available, unavailable]
+          description: Whether the page offers the sign-in through the identity provider.
+
+    SignInRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          description: Sign-in address, in any case.
+        password:
+          type: string
+          format: password
+
+    Session:
+      type: object
+      additionalProperties: false
+      required: [user, idle_expires_at, expires_at]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        idle_expires_at:
+          type: string
+          format: date-time
+          description: When the session ends unless it is used before.
+        expires_at:
+          type: string
+          format: date-time
+          description: When the session ends at the latest.
+
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, email, display_name, role, status, totp_enabled, sign_in_method]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+        role:
+          type: string
+          enum: [admin, user, viewer]
+        status:
+          type: string
+          enum: [pending, active, deactivated]
+          description: A pending account has not set a password yet. A deactivated account cannot sign in.
+        totp_enabled:
+          type: boolean
+          description: Whether signing in takes a code of a TOTP factor in addition to the password.
+        sign_in_method:
+          type: string
+          enum: [password, oidc]
+          description: |
+            How the account signs in. An account of the identity provider (`oidc`) is created at its
+            first sign-in, has no password and takes its role from its groups at the provider.
+
+    AuditEntryPage:
+      type: object
+      additionalProperties: false
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEntry"
+        next_cursor:
+          type: string
+          description: Cursor of the next page. Absent on the last page.
+
+    AuditEntry:
+      type: object
+      additionalProperties: false
+      required: [id, occurred_at, action, outcome, actor, changed_fields]
+      properties:
+        id:
+          type: string
+          format: uuid
+        occurred_at:
+          type: string
+          format: date-time
+        action:
+          type: string
+          description: What was done, in the form `resource.verb`, such as `session.create`. A denied request names the permission it lacked, such as `audit.read`.
+          examples: [session.create]
+        outcome:
+          type: string
+          enum: [success, failure, denied]
+        actor:
+          $ref: "#/components/schemas/AuditActor"
+        resource:
+          $ref: "#/components/schemas/AuditResource"
+        changed_fields:
+          type: array
+          description: Names of the fields that an update changed, never their values.
+          items:
+            type: string
+        client_ip:
+          type: string
+          description: Address of the client, if the action came from one.
+        request_id:
+          type: string
+          description: Links the entry to the log records of its request.
+
+    AuditActor:
+      type: object
+      additionalProperties: false
+      required: [kind, auth_method]
+      properties:
+        kind:
+          type: string
+          enum: [user, api_key, setup, system, anonymous]
+        auth_method:
+          type: string
+          enum: [password, oidc, session, api_key, setup_token, activation_token, password_reset_token, totp,
+            recovery_code, cli, none]
+        user_id:
+          type: string
+          format: uuid
+          description: Absent once the account has been deleted.
+        email:
+          type: string
+          description: Address of the account when the entry was written.
+        display_name:
+          type: string
+          description: Display name of the account, or name of the API key, when the entry was written.
+        api_key_id:
+          type: string
+          format: uuid
+          description: The API key that acted, for the kind `api_key`.
+
+    AuditResource:
+      type: object
+      additionalProperties: false
+      required: [type, id]
+      properties:
+        type:
+          type: string
+          examples: [user]
+        id:
+          type: string
+          format: uuid
+
+    UserPage:
+      type: object
+      additionalProperties: false
+      required: [users]
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        next_cursor:
+          type: string
+          description: Cursor of the next page. Absent on the last page.
+
+    CreateUserRequest:
+      type: object
+      additionalProperties: false
+      required: [email, display_name, role]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: The sign-in name of the account. It cannot be changed later.
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        role:
+          type: string
+          enum: [admin, user, viewer]
+
+    UpdateUserRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        role:
+          type: string
+          enum: [admin, user, viewer]
+        status:
+          type: string
+          enum: [active, deactivated]
+        totp_enabled:
+          type: boolean
+          const: false
+          description: Removes the TOTP factor. A factor is enabled only by its user.
+        password:
+          type: string
+          writeOnly: true
+          description: |
+            The password of the administrator. Only with `totp_enabled`, and required with it unless the
+            administrator signs in through the identity provider.
+
+    CreatedUser:
+      type: object
+      additionalProperties: false
+      required: [user, activation]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        activation:
+          $ref: "#/components/schemas/ActivationLink"
+
+    ActivationLink:
+      type: object
+      additionalProperties: false
+      required: [url, expires_at]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: The activation link. It is shown only once.
+        expires_at:
+          type: string
+          format: date-time
+
+    ActivationRequest:
+      type: object
+      additionalProperties: false
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          description: The token from the fragment of the activation link.
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          description: Counted in Unicode code points after NFC normalization.
+
+    PasswordResetLink:
+      type: object
+      additionalProperties: false
+      required: [url, expires_at]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: The password reset link. It is shown only once.
+        expires_at:
+          type: string
+          format: date-time
+
+    PasswordResetRequest:
+      type: object
+      additionalProperties: false
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          description: The token from the fragment of the password reset link.
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          description: Counted in Unicode code points after NFC normalization.
+
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [current_password, new_password]
+      properties:
+        current_password:
+          type: string
+        new_password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          description: Counted in Unicode code points after NFC normalization.
+
+    SecondFactorChallenge:
+      type: object
+      additionalProperties: false
+      required: [second_factor, expires_at]
+      properties:
+        second_factor:
+          type: string
+          enum: [totp]
+        expires_at:
+          type: string
+          format: date-time
+          description: When the challenge ends. The user then signs in again.
+
+    SecondFactorProof:
+      type: object
+      additionalProperties: false
+      description: Exactly one of `code` and `recovery_code`.
+      properties:
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          description: The current code of the authenticator app.
+        recovery_code:
+          type: string
+          description: A recovery code, such as `abcd-efgh-ijkl-mnop`. Case, hyphens and spaces do not matter.
+
+    SecondFactorConfirmation:
+      type: object
+      additionalProperties: false
+      required: [password]
+      description: The password and exactly one of `code` and `recovery_code`.
+      properties:
+        password:
+          type: string
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+        recovery_code:
+          type: string
+
+    APIKey:
+      type: object
+      additionalProperties: false
+      required: [id, name, created_by, scopes, created_at, expires_at, last_used_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The identifier of the key. It is part of the key and not secret.
+        name:
+          type: string
+        created_by:
+          description: The administrator who created the key, or null if the account was deleted since.
+          type: [string, "null"]
+          format: uuid
+        scopes:
+          type: array
+          items:
+            type: string
+            pattern: "^[a-z][a-z_]*:[a-z][a-z_]*$"
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        last_used_at:
+          description: When the key was last used, exact to a minute, or null if it was never used.
+          type: [string, "null"]
+          format: date-time
+
+    APIKeyList:
+      type: object
+      additionalProperties: false
+      required: [api_keys]
+      properties:
+        api_keys:
+          type: array
+          items:
+            $ref: "#/components/schemas/APIKey"
+
+    CreateAPIKeyRequest:
+      type: object
+      additionalProperties: false
+      required: [name, scopes, expires_at]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: A name that tells the user what the key is for.
+        scopes:
+          type: array
+          minItems: 1
+          maxItems: 16
+          uniqueItems: true
+          description: |
+            The permissions of the key. A scope to write requires the scope to read the same resource,
+            because a key that changes a resource receives it in the responses. `scenarios:read` and
+            `artifacts:read` require `honeytokens:read`, because the guide of a scenario and the content of
+            an artifact name the URLs and host names of honeytokens.
+          items:
+            type: string
+            enum: [artifacts:read, artifacts:write, audit:read, catalog:read, events:read, honeypots:read, honeypots:write, honeytokens:read, honeytokens:write, incidents:read, incidents:write, metrics:read, scenarios:read, scenarios:write]
+        expires_at:
+          type: string
+          format: date-time
+          description: When the key expires, in the future and at most three years away.
+        password:
+          type: string
+          description: The password of the administrator. Required unless the administrator signs in through the identity provider.
+
+    CreatedAPIKey:
+      type: object
+      additionalProperties: false
+      required: [id, name, created_by, scopes, created_at, expires_at, last_used_at, key]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        created_by:
+          description: The administrator who created the key, or null if the account was deleted since.
+          type: [string, "null"]
+          format: uuid
+        scopes:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: "null"
+        key:
+          type: string
+          description: The API key. It is shown only once.
+
+    PasswordConfirmation:
+      type: object
+      additionalProperties: false
+      required: [password]
+      properties:
+        password:
+          type: string
+
+    TOTPCode:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+
+    TOTPSetup:
+      type: object
+      additionalProperties: false
+      required: [secret, uri, expires_at]
+      properties:
+        secret:
+          type: string
+          description: The secret in base32, for typing it into an authenticator app.
+        uri:
+          type: string
+          description: The `otpauth://totp/` URI of the factor, usually shown as a QR code. It contains the secret.
+        expires_at:
+          type: string
+          format: date-time
+          description: The factor must be confirmed before this time.
+
+    RecoveryCodes:
+      type: object
+      additionalProperties: false
+      required: [recovery_codes]
+      properties:
+        recovery_codes:
+          type: array
+          minItems: 10
+          maxItems: 10
+          items:
+            type: string
+            pattern: "^[a-z2-7]{4}-[a-z2-7]{4}-[a-z2-7]{4}-[a-z2-7]{4}$"
+
+    AlertChannel:
+      type: object
+      additionalProperties: false
+      required: [id, name, type, enabled, target, header_name, recipients, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        type:
+          type: string
+          enum: [webhook, slack, teams, email]
+          description: |
+            How the alert is sent: `webhook` posts it as JSON, `slack` to an incoming webhook of Slack,
+            `teams` to a workflow of Microsoft Teams, `email` as mail through the SMTP server of the
+            operator.
+        enabled:
+          type: boolean
+        target:
+          type: [string, "null"]
+          description: The scheme, host and port of the URL, shown instead of it; null for `email`.
+          examples: ["https://hooks.slack.com"]
+        header_name:
+          type: [string, "null"]
+          description: The name of the header that a webhook sends; its value is never returned.
+        recipients:
+          type: [array, "null"]
+          description: The addresses that a channel of the type `email` sends to; null for every other type.
+          minItems: 1
+          maxItems: 10
+          items:
+            $ref: "#/components/schemas/EmailAddress"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AlertChannelList:
+      type: object
+      additionalProperties: false
+      required: [alert_channels]
+      properties:
+        alert_channels:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/AlertChannel"
+
+    AlertChannelHeader:
+      type: object
+      additionalProperties: false
+      required: [name, value]
+      description: A header that a webhook sends with every request, such as the token of the receiver.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"
+          description: |
+            A header name other than `Host`, `Content-Length`, `Content-Type`, `Content-Encoding`,
+            `Transfer-Encoding`, `Connection`, `Keep-Alive`, `TE`, `Trailer`, `Upgrade`, `Expect` and
+            `Proxy-*`.
+          examples: ["Authorization"]
+        value:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          pattern: "^[\\x20-\\x7e]+$"
+          writeOnly: true
+          description: A secret, stored encrypted and never returned.
+
+    EmailAddress:
+      type: string
+      minLength: 3
+      maxLength: 254
+      pattern: "^[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]+@[A-Za-z0-9.-]+$"
+      description: |
+        An address of the form `local@domain` in ASCII, without display name, comment or quoting; an
+        internationalized domain in its ASCII form.
+      examples: ["soc@example.com"]
+
+    CreateAlertChannelRequest:
+      type: object
+      additionalProperties: false
+      required: [name, type]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        type:
+          type: string
+          enum: [webhook, slack, teams, email]
+        enabled:
+          type: boolean
+          default: true
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+          writeOnly: true
+          description: |
+            The URL that receives the alerts, including any token in its path or query. A secret,
+            stored encrypted and never returned. Required for every type other than `email`.
+        header:
+          $ref: "#/components/schemas/AlertChannelHeader"
+        recipients:
+          type: array
+          minItems: 1
+          maxItems: 10
+          uniqueItems: true
+          description: The addresses of a channel of the type `email`, which has no URL. No address repeats, ignoring case.
+          items:
+            $ref: "#/components/schemas/EmailAddress"
+        password:
+          type: string
+          writeOnly: true
+          description: The password of the administrator. Omitted by an administrator of the identity provider.
+
+    UpdateAlertChannelRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+        enabled:
+          type: boolean
+        url:
+          type: string
+          format: uri
+          maxLength: 2048
+          writeOnly: true
+        header:
+          oneOf:
+            - $ref: "#/components/schemas/AlertChannelHeader"
+            - type: "null"
+          description: Replaces the header of a webhook; null removes it.
+        recipients:
+          type: array
+          minItems: 1
+          maxItems: 10
+          uniqueItems: true
+          description: Replaces the recipients of a channel of the type `email`.
+          items:
+            $ref: "#/components/schemas/EmailAddress"
+        password:
+          type: string
+          writeOnly: true
+          description: |
+            The password of the administrator, required for every change other than a new `name`.
+            Omitted by an administrator of the identity provider.
+
+    AlertDelivery:
+      type: object
+      additionalProperties: false
+      required: [id, incident_id, channel_id, channel_type, channel_name, status, attempts, next_attempt_at,
+        last_attempt_at, last_status_code, last_error, last_duration_ms, delivered_at, created_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Also the `delivery_id` of the message that the channel receives.
+        incident_id:
+          type: [string, "null"]
+          format: uuid
+          description: The incident of the alert, or null for a test.
+        channel_id:
+          type: string
+          format: uuid
+          description: The channel. It may have been deleted since.
+        channel_type:
+          type: string
+          enum: [webhook, slack, teams, email]
+        channel_name:
+          type: string
+          description: The name of the channel when the delivery was created.
+        status:
+          type: string
+          enum: [pending, delivered, dead, canceled]
+          description: |
+            `pending` waits for its next attempt, `delivered` was accepted by the receiver, `dead` failed
+            for the last time or in a way no retry can mend, `canceled` was not sent because its channel
+            was disabled or deleted first.
+        attempts:
+          type: integer
+          minimum: 0
+          maximum: 10
+        next_attempt_at:
+          type: [string, "null"]
+          format: date-time
+          description: When the next attempt is due, while the delivery is pending.
+        last_attempt_at:
+          type: [string, "null"]
+          format: date-time
+        last_status_code:
+          type: [integer, "null"]
+          description: |
+            The HTTP status of the response to the last attempt, or for `email` the reply code with
+            which the SMTP server refused it, if there was one.
+        last_error:
+          type: [string, "null"]
+          enum: [http_status, smtp_status, redirect, timeout, network, tls, blocked, invalid_channel, not_configured, null]
+          description: |
+            The class of the failure of the last attempt: the receiver answered with another status than
+            2xx (`http_status`) or a redirect, which is never followed (`redirect`), the SMTP server
+            refused the mail (`smtp_status`), the request timed out, the connection failed (`network`)
+            or its TLS handshake, also when an SMTP server does not offer STARTTLS (`tls`), the target
+            resolved to an address that is not allowed (`blocked`), the channel cannot be sent to, for
+            example because its secrets cannot be decrypted (`invalid_channel`), or mail cannot be sent,
+            because no SMTP server is configured or it offers no authentication (`not_configured`).
+        last_duration_ms:
+          type: [integer, "null"]
+          minimum: 0
+        delivered_at:
+          type: [string, "null"]
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    AlertDeliveryList:
+      type: object
+      additionalProperties: false
+      required: [deliveries]
+      properties:
+        deliveries:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/AlertDelivery"
+
+    CatalogDeceptionList:
+      type: object
+      additionalProperties: false
+      required: [deceptions]
+      properties:
+        deceptions:
+          type: array
+          items:
+            $ref: "#/components/schemas/CatalogDeceptionSummary"
+    CatalogDeceptionSummary:
+      type: object
+      additionalProperties: false
+      required: [id, category, title, summary, techniques, engage_activities]
+      properties:
+        id:
+          type: string
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+        category:
+          type: string
+          enum: [identity, network, data, endpoint, application]
+        title:
+          type: string
+        summary:
+          type: string
+        techniques:
+          type: array
+          description: Identifiers of the MITRE ATT&CK techniques that a trigger of the deception suggests.
+          items:
+            type: string
+            pattern: "^T[0-9]{4}(\\.[0-9]{3})?$"
+        engage_activities:
+          type: array
+          description: Identifiers of the MITRE Engage activities that the deception carries out.
+          items:
+            type: string
+            pattern: "^EAC[0-9]{4}$"
+    CatalogDeception:
+      type: object
+      additionalProperties: false
+      required: [id, category, title, summary, techniques, engage_activities, honeytokens, persona, secrets, artifacts]
+      properties:
+        id:
+          type: string
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+        category:
+          type: string
+          enum: [identity, network, data, endpoint, application]
+        title:
+          type: string
+        summary:
+          type: string
+        techniques:
+          type: array
+          description: Identifiers of the MITRE ATT&CK techniques that a trigger of the deception suggests.
+          items:
+            type: string
+            pattern: "^T[0-9]{4}(\\.[0-9]{3})?$"
+        engage_activities:
+          type: array
+          description: Identifiers of the MITRE Engage activities that the deception carries out.
+          items:
+            type: string
+            pattern: "^EAC[0-9]{4}$"
+        honeytokens:
+          type: array
+          description: The honeytokens that applying the deception creates.
+          items:
+            type: object
+            additionalProperties: false
+            required: [key, type, label, techniques, severity]
+            properties:
+              key:
+                type: string
+              type:
+                type: string
+                enum: [web_url, web_image, dns]
+              label:
+                type: string
+              techniques:
+                type: array
+                description: Identifiers of the MITRE ATT&CK techniques that the honeytoken receives.
+                items:
+                  type: string
+                  pattern: "^T[0-9]{4}(\\.[0-9]{3})?$"
+              severity:
+                type: string
+                enum: [low, medium, high, critical]
+                description: The severity that the honeytoken receives.
+        persona:
+          type: array
+          description: |
+            The values that the administrator enters when applying the deception, so that the
+            artifacts fit the environment. `example` only illustrates a value; the deception has no
+            default for it, because a value that every installation shares would identify the artifacts.
+          items:
+            type: object
+            additionalProperties: false
+            required: [key, kind, label, example]
+            properties:
+              key:
+                type: string
+              kind:
+                type: string
+                enum: [host, name, text]
+                description: |
+                  `host` is a host name of lowercase letters, digits, hyphens and dots, `name` an account
+                  name, and `text` free text on one line, which appears only in files that a person reads.
+              label:
+                type: string
+              example:
+                type: string
+        secrets:
+          type: array
+          description: The random values of letters and digits that applying the deception generates, such as passwords.
+          items:
+            type: object
+            additionalProperties: false
+            required: [key, length]
+            properties:
+              key:
+                type: string
+              length:
+                type: integer
+                minimum: 8
+                maximum: 64
+        artifacts:
+          type: array
+          description: The files that applying the deception renders. A deception without artifacts consists of its guide.
+          items:
+            type: object
+            additionalProperties: false
+            required: [key, file_name, format]
+            properties:
+              key:
+                type: string
+              file_name:
+                type: string
+              format:
+                type: string
+                enum: [text, markdown, html, config]
+    Honeytoken:
+      type: object
+      additionalProperties: false
+      required: [id, type, name, notes, enabled, redirect_url, techniques, severity, trigger_value, trigger_url, trigger_names, scenario_id, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [web_url, web_image, dns]
+          description: |
+            `web_url` is triggered when the URL is opened, for example through a link or a QR code, and
+            redirects the browser. `web_image` is triggered when the URL is loaded as an image, for example
+            when a document or mail that embeds it is opened. `dns` is triggered when one of its names is
+            resolved, for example by a tool that connects to a host named in a configuration file.
+        name:
+          type: string
+        notes:
+          type: string
+          description: Where and why the honeytoken was placed. Empty if there are none.
+        enabled:
+          type: boolean
+          description: Whether a request of the URL or a query of a name raises an event.
+        redirect_url:
+          description: Where the URL of a `web_url` redirects, or null for the default target of the trigger.
+          type: [string, "null"]
+          format: uri
+        techniques:
+          type: array
+          description: Identifiers of the MITRE ATT&CK techniques that a trigger suggests.
+          items:
+            type: string
+            pattern: "^T[0-9]{4}(\\.[0-9]{3})?$"
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+          description: The severity that the events of the honeytoken receive.
+        trigger_value:
+          type: string
+          pattern: "^[a-z2-7]{26}$"
+          description: The value that triggers the honeytoken. It is part of `trigger_url` or `trigger_names` and cannot be changed.
+        trigger_url:
+          type: [string, "null"]
+          format: uri
+          description: |
+            The URL to place: the public address of the trigger followed by
+            `/` and the trigger value, and for a `web_image` by `.gif`. Null
+            for a `dns` honeytoken, which has names instead.
+        trigger_names:
+          type: array
+          description: |
+            The host names of a `dns` honeytoken, one per zone of the DNS role:
+            the trigger value followed by `.` and the zone. Place any of them.
+            Empty for every other type.
+          items:
+            type: string
+        scenario_id:
+          type: [string, "null"]
+          format: uuid
+          description: The scenario that the honeytoken belongs to, or null if it stands alone.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    HoneytokenPage:
+      type: object
+      additionalProperties: false
+      required: [honeytokens]
+      properties:
+        honeytokens:
+          type: array
+          items:
+            $ref: "#/components/schemas/Honeytoken"
+        next_cursor:
+          type: string
+          description: Cursor of the next page. Absent on the last page.
+
+    AssignScenarioRequest:
+      type: object
+      additionalProperties: false
+      required: [scenario_id]
+      properties:
+        scenario_id:
+          type: string
+          format: uuid
+
+    Honeypot:
+      type: object
+      additionalProperties: false
+      required: [id, service, name, notes, enabled, techniques, severity, scenario_id, status, last_seen_at, sensor_version, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        service:
+          type: string
+          enum: [ssh, telnet, postgres, ldap]
+          description: The network service that the sensor emulates. It cannot be changed.
+        name:
+          type: string
+        notes:
+          type: string
+          description: Where and why the honeypot runs. Empty if there are none.
+        enabled:
+          type: boolean
+          description: Whether the honeypot is active.
+        techniques:
+          type: array
+          description: |
+            Identifiers of the MITRE ATT&CK techniques that an event suggests, in addition to those that
+            the kind of event suggests.
+          items:
+            type: string
+            pattern: "^T[0-9]{4}(\\.[0-9]{3})?$"
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+          description: The severity that the events of the honeypot receive, whatever the kind of event.
+        scenario_id:
+          type: [string, "null"]
+          format: uuid
+          description: The scenario that the honeypot belongs to, or null if it stands alone.
+        status:
+          type: string
+          enum: [never, online, offline]
+          description: |
+            `never` if no sensor has reported with the current secret, `online` if a sensor reported
+            within the last 15 minutes, and `offline` otherwise.
+        last_seen_at:
+          type: [string, "null"]
+          format: date-time
+          description: When a sensor last reported with the current secret, or null if none has.
+        sensor_version:
+          type: [string, "null"]
+          description: The version that the sensor named when it last reported, or null.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreatedHoneypot:
+      type: object
+      additionalProperties: false
+      required: [id, service, name, notes, enabled, techniques, severity, scenario_id, status, last_seen_at, sensor_version, created_at, updated_at, secret, sensor_config]
+      properties:
+        id:
+          type: string
+          format: uuid
+        service:
+          type: string
+          enum: [ssh, telnet, postgres, ldap]
+        name:
+          type: string
+        notes:
+          type: string
+        enabled:
+          type: boolean
+        techniques:
+          type: array
+          items:
+            type: string
+            pattern: "^T[0-9]{4}(\\.[0-9]{3})?$"
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+        scenario_id:
+          type: [string, "null"]
+          format: uuid
+        status:
+          type: string
+          enum: [never]
+          description: A new secret has not been used by any sensor yet.
+        last_seen_at:
+          type: "null"
+        sensor_version:
+          type: "null"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        secret:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{43}$"
+          description: The secret that the sensor presents for this honeypot. It is shown only once.
+        sensor_config:
+          type: string
+          description: |
+            The entry of this honeypot for the configuration file of the
+            sensor: a list item for `honeypots:`, in YAML, with the identifier,
+            the service, the usual port of the service as the address to listen
+            on, and the secret. For `ssh` it also names the file of the host
+            key, which the operator creates. It holds the secret and is shown
+            only once. Name and notes are not part of it.
+
+    HoneypotPage:
+      type: object
+      additionalProperties: false
+      required: [honeypots]
+      properties:
+        honeypots:
+          type: array
+          items:
+            $ref: "#/components/schemas/Honeypot"
+        next_cursor:
+          type: string
+          description: Cursor of the next page. Absent on the last page.
+
+    CreateHoneypotRequest:
+      type: object
+      additionalProperties: false
+      required: [service, name]
+      properties:
+        service:
+          type: string
+          enum: [ssh, telnet, postgres, ldap]
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Printable characters without leading or trailing spaces.
+        notes:
+          type: string
+          maxLength: 2000
+          default: ""
+          description: Where and why the honeypot runs. Line breaks and tabs are allowed.
+        enabled:
+          type: boolean
+          default: true
+        techniques:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          default: []
+          description: Identifiers of techniques of the ATT&CK version that the server bundles, such as `T1021.004`.
+          items:
+            type: string
+            pattern: "^T[0-9]{4}(\\.[0-9]{3})?$"
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+          description: The severity that the events of the honeypot receive. Without it, `medium`.
+
+    UpdateHoneypotRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        notes:
+          type: string
+          maxLength: 2000
+        enabled:
+          type: boolean
+        techniques:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          description: Replaces the techniques. An empty list removes them.
+          items:
+            type: string
+            pattern: "^T[0-9]{4}(\\.[0-9]{3})?$"
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+          description: Changes the severity of later events. Recorded events keep theirs.
+
+    Scenario:
+      type: object
+      additionalProperties: false
+      required: [id, name, notes, engage_activities, deception_id, language, persona, created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        notes:
+          type: string
+          description: The story of the scenario and where its decoys are placed. Empty if there are none.
+        engage_activities:
+          type: array
+          description: Identifiers of the engagement activities of MITRE Engage that the scenario carries out.
+          items:
+            type: string
+            pattern: "^EAC[0-9]{4}$"
+        deception_id:
+          type: [string, "null"]
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+          description: The deception of the catalog that the scenario was created from, or null for a scenario put together by hand.
+        language:
+          type: [string, "null"]
+          enum: [en, de, null]
+          description: The language of the guide and of the names of the honeytokens that applying the deception created, or null for a scenario put together by hand.
+        persona:
+          type: [object, "null"]
+          additionalProperties:
+            type: string
+          description: The values of the persona that the deception was applied with, by key, or null for a scenario put together by hand.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ApplyDeceptionRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: The name of the scenario. Printable characters without leading or trailing spaces.
+        notes:
+          type: string
+          maxLength: 2000
+          default: ""
+          description: The notes of the scenario. Line breaks and tabs are allowed.
+        language:
+          type: string
+          enum: [en, de]
+          description: The language of the guide and of the names of the honeytokens. Without it, English.
+        persona:
+          type: object
+          default: {}
+          description: |
+            A value for every value of the persona of the deception, by key, and nothing else. Each value
+            must not be empty and must match its kind: `host` a host name in lower case, `name` an account
+            name, `text` one line of up to 200 characters.
+          additionalProperties:
+            type: string
+
+    AppliedDeception:
+      type: object
+      additionalProperties: false
+      required: [scenario, honeytokens, artifacts]
+      properties:
+        scenario:
+          $ref: "#/components/schemas/Scenario"
+        honeytokens:
+          type: array
+          items:
+            $ref: "#/components/schemas/Honeytoken"
+        artifacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Artifact"
+
+    ScenarioGuide:
+      type: object
+      additionalProperties: false
+      required: [language, content]
+      properties:
+        language:
+          type: string
+          enum: [en, de]
+        content:
+          type: string
+          description: The guide in Markdown.
+
+    Artifact:
+      type: object
+      additionalProperties: false
+      required: [id, scenario_id, deception_artifact, file_name, format, media_type, size, placement_notes,
+        created_at, updated_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        scenario_id:
+          type: [string, "null"]
+          format: uuid
+          description: The scenario that applying the deception created, or null once it was deleted and the artifact kept.
+        deception_artifact:
+          type: string
+          pattern: "^[a-z0-9]+(-[a-z0-9]+)*$"
+          description: The key of the artifact in its deception.
+        file_name:
+          type: string
+          description: The name under which the artifact is downloaded.
+        format:
+          type: string
+          enum: [text, markdown, html, config]
+          description: |
+            `text` and `markdown` are read by a person, `html` is opened in a browser, `config` is read by a
+            tool, such as an SSH configuration or a Windows shortcut.
+        media_type:
+          type: string
+          description: The media type of the download.
+        size:
+          type: integer
+          minimum: 0
+          maximum: 1048576
+          description: The length of the content in bytes.
+        placement_notes:
+          type: string
+          description: Where the artifact was placed. Empty if there are none.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    ArtifactPage:
+      type: object
+      additionalProperties: false
+      required: [artifacts]
+      properties:
+        artifacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Artifact"
+        next_cursor:
+          type: string
+          description: Cursor of the next page. Absent on the last page.
+
+    UpdateArtifactRequest:
+      type: object
+      additionalProperties: false
+      required: [placement_notes]
+      properties:
+        placement_notes:
+          type: string
+          maxLength: 2000
+          description: Where the artifact was placed. Line breaks and tabs are allowed; an empty string removes the notes.
+
+    ScenarioPage:
+      type: object
+      additionalProperties: false
+      required: [scenarios]
+      properties:
+        scenarios:
+          type: array
+          items:
+            $ref: "#/components/schemas/Scenario"
+        next_cursor:
+          type: string
+          description: Cursor of the next page. Absent on the last page.
+
+    CreateScenarioRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Printable characters without leading or trailing spaces.
+        notes:
+          type: string
+          maxLength: 2000
+          default: ""
+          description: The story of the scenario and where its decoys are placed. Line breaks and tabs are allowed.
+        engage_activities:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          default: []
+          description: Identifiers of engagement activities of the Engage version that the server bundles, such as `EAC0005`.
+          items:
+            type: string
+            pattern: "^EAC[0-9]{4}$"
+
+    UpdateScenarioRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        notes:
+          type: string
+          maxLength: 2000
+        engage_activities:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            pattern: "^EAC[0-9]{4}$"
+
+    CreateHoneytokenRequest:
+      type: object
+      additionalProperties: false
+      required: [type, name]
+      properties:
+        type:
+          type: string
+          enum: [web_url, web_image, dns]
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Printable characters without leading or trailing spaces.
+        notes:
+          type: string
+          maxLength: 2000
+          default: ""
+          description: Where and why the honeytoken is placed. Line breaks and tabs are allowed.
+        enabled:
+          type: boolean
+          default: true
+        redirect_url:
+          type: string
+          format: uri
+          maxLength: 2048
+          description: |
+            Only for `web_url`: where the URL redirects. An `http` or `https` URL with a lowercase scheme, in
+            printable ASCII, whose host is a name, not an IP address, and without user information.
+        techniques:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          default: []
+          description: Identifiers of techniques of the ATT&CK version that the server bundles, such as `T1078` or `T1003.001`.
+          items:
+            type: string
+            pattern: "^T[0-9]{4}(\\.[0-9]{3})?$"
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+          description: The severity that the events of the honeytoken receive. Without it, the default of the type.
+
+    UpdateHoneytokenRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        notes:
+          type: string
+          maxLength: 2000
+        enabled:
+          type: boolean
+        redirect_url:
+          description: Only for `web_url`. null removes the redirect.
+          type: [string, "null"]
+          format: uri
+          maxLength: 2048
+        techniques:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          description: Replaces the techniques. An empty list removes them.
+          items:
+            type: string
+            pattern: "^T[0-9]{4}(\\.[0-9]{3})?$"
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+          description: Changes the severity of later events. Recorded events keep theirs.
+
+    Incident:
+      type: object
+      additionalProperties: false
+      required: [id, resource_type, resource_id, resource_name, status, severity, event_severity, severity_override,
+        techniques, event_techniques, techniques_override, notes, event_count, first_event_at, last_event_at, opened_at,
+        acknowledged_at, closed_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        resource_type:
+          type: string
+          enum: [honeypot, honeytoken, scenario]
+          description: |
+            `scenario` for an incident that correlates the events of every
+            honeytoken and honeypot of a scenario, `honeytoken` or `honeypot`
+            for one of a resource that stood alone when its events arrived.
+        resource_id:
+          type: string
+          format: uuid
+          description: The scenario, honeytoken or honeypot of the incident. It may have been deleted since.
+        resource_name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: |
+            The name of the scenario, honeytoken or honeypot when the incident opened. It is a snapshot: renaming
+            or deleting the resource does not change it.
+        status:
+          type: string
+          enum: [open, acknowledged, closed]
+          description: |
+            `acknowledged` incidents are still open: like `open` ones, they collect the events of their
+            honeytoken. A `closed` incident collects no more events and is never opened again.
+        severity:
+          type: string
+          enum: [info, low, medium, high, critical]
+          description: The severity of the incident, `severity_override` if it is set, `event_severity` otherwise.
+        event_severity:
+          type: string
+          enum: [low, medium, high, critical]
+          description: The highest severity that the events suggest.
+        severity_override:
+          type: [string, "null"]
+          enum: [info, low, medium, high, critical, null]
+          description: The severity that an analyst set, or null.
+        techniques:
+          type: array
+          description: The techniques of the incident, `techniques_override` if it is set, `event_techniques` otherwise.
+          items:
+            type: string
+            pattern: "^T[0-9]{4}(\\.[0-9]{3})?$"
+        event_techniques:
+          type: array
+          description: Every technique of the events.
+          items:
+            type: string
+            pattern: "^T[0-9]{4}(\\.[0-9]{3})?$"
+        techniques_override:
+          type: [array, "null"]
+          description: The techniques that an analyst set, or null.
+          items:
+            type: string
+            pattern: "^T[0-9]{4}(\\.[0-9]{3})?$"
+        notes:
+          type: string
+        event_count:
+          type: integer
+          minimum: 1
+        first_event_at:
+          type: string
+          format: date-time
+        last_event_at:
+          type: string
+          format: date-time
+        opened_at:
+          type: string
+          format: date-time
+        acknowledged_at:
+          type: [string, "null"]
+          format: date-time
+        closed_at:
+          type: [string, "null"]
+          format: date-time
+
+    IncidentPage:
+      type: object
+      additionalProperties: false
+      required: [incidents]
+      properties:
+        incidents:
+          type: array
+          items:
+            $ref: "#/components/schemas/Incident"
+        next_cursor:
+          type: string
+          description: Cursor of the next page. Absent on the last page.
+
+    TriageIncidentRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        status:
+          type: string
+          enum: [open, acknowledged, closed]
+          description: Only moves forward.
+        notes:
+          type: string
+          maxLength: 10000
+          description: Replaces the notes. Line breaks and tabs are allowed.
+        severity_override:
+          type: [string, "null"]
+          enum: [info, low, medium, high, critical, null]
+          description: null removes the override.
+        techniques_override:
+          type: [array, "null"]
+          maxItems: 20
+          uniqueItems: true
+          description: |
+            Identifiers of techniques of the ATT&CK version that the server bundles. An empty list states
+            that the incident suggests no technique; null removes the override.
+          items:
+            type: string
+            pattern: "^T[0-9]{4}(\\.[0-9]{3})?$"
+
+    Event:
+      type: object
+      additionalProperties: false
+      required: [id, resource_type, resource_id, scenario_id, honeytoken_type, techniques, severity, incident_id,
+        occurred_at, recorded_at, channel, client_ip, http, dns, sensor]
+      properties:
+        id:
+          type: string
+          format: uuid
+        resource_type:
+          type: string
+          enum: [honeypot, honeytoken]
+        resource_id:
+          type: string
+          format: uuid
+          description: The honeytoken that was requested or the honeypot that was reached. It may have been deleted since.
+        scenario_id:
+          type: [string, "null"]
+          format: uuid
+          description: |
+            The scenario that the honeytoken or honeypot belonged to when the event arrived,
+            or null if it stood alone. The event belongs to the incidents of
+            this scenario, also if the resource changed its scenario since.
+        honeytoken_type:
+          type: [string, "null"]
+          enum: [web_url, web_image, dns, null]
+          description: The type of the honeytoken; null for a honeypot.
+        techniques:
+          type: array
+          description: |
+            The techniques that the honeytoken had when it was requested. For a session of a honeypot, those
+            of its kind of event for the service, followed by those of the honeypot when the session ended.
+          items:
+            type: string
+            pattern: "^T[0-9]{4}(\\.[0-9]{3})?$"
+        severity:
+          type: string
+          enum: [low, medium, high, critical]
+          description: The severity that the honeytoken or honeypot had when the event arrived.
+        incident_id:
+          type: [string, "null"]
+          format: uuid
+          description: The incident of the event, or null until the worker has processed it.
+        occurred_at:
+          type: string
+          format: date-time
+          description: When the request or query arrived, or when the session began.
+        recorded_at:
+          type: string
+          format: date-time
+          description: When the event was written.
+        channel:
+          type: string
+          enum: [http, dns, sensor]
+        client_ip:
+          type: [string, "null"]
+          description: |
+            The address of the client, or for `dns` of the resolver that sent the query, or for `sensor` of
+            the attacker as the sensor saw it, or null if it is unknown. Personal data.
+        http:
+          description: The request, for the channel `http`; null otherwise.
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/EventRequest"
+        dns:
+          description: The query, for the channel `dns`; null otherwise.
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/EventQuery"
+        sensor:
+          description: The session, for the channel `sensor`; null otherwise.
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/EventSession"
+
+    EventSession:
+      type: object
+      additionalProperties: false
+      required: [service, event_type, port, duration_ms, client_version, database, application_name, query, attempts]
+      description: |
+        What a sensor reported about one session of an attacker with a honeypot. The sensor and the attacker chose
+        everything but `service` and `event_type`: the text is shortened, and invalid and non-printable characters
+        are replaced; treat it as claims, not facts. Personal data. A password is never stored, only its length.
+      properties:
+        service:
+          type: string
+          enum: [ssh, telnet, postgres, ldap]
+          description: The service of the honeypot when the session ended.
+        event_type:
+          type: string
+          enum: [connection, login_attempt, directory_query]
+          description: |
+            The highest stage that the session reached: `directory_query` ranks above `login_attempt`, which
+            ranks above a bare `connection`.
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          description: The port of the honeypot that the attacker reached.
+        duration_ms:
+          type: integer
+          minimum: 0
+          maximum: 300000
+          description: How long the session lasted, in milliseconds.
+        client_version:
+          type: [string, "null"]
+          description: The version string of an SSH client, or null.
+        database:
+          type: [string, "null"]
+          description: The database that a PostgreSQL client asked for, or null.
+        application_name:
+          type: [string, "null"]
+          description: The application name that a PostgreSQL client gave, or null.
+        query:
+          description: The first search of a directory client, or null.
+          oneOf:
+            - type: "null"
+            - $ref: "#/components/schemas/EventSessionQuery"
+        attempts:
+          type: array
+          maxItems: 6
+          description: The logins and binds of the session, in the order in which they were made.
+          items:
+            $ref: "#/components/schemas/EventAttempt"
+
+    EventSessionQuery:
+      type: object
+      additionalProperties: false
+      required: [base_dn, filter]
+      properties:
+        base_dn:
+          type: string
+          description: The base of the search. The empty string is the root of the directory.
+        filter:
+          type: string
+
+    EventAttempt:
+      type: object
+      additionalProperties: false
+      required: [username, password_length, key_fingerprint]
+      properties:
+        username:
+          type: string
+          description: The user name or distinguished name that the attacker used. It may be empty.
+        password_length:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 65535
+          description: The length of the password that was sent, or null if none was. The password itself is not stored.
+        key_fingerprint:
+          type: [string, "null"]
+          pattern: "^SHA256:[A-Za-z0-9+/]{43}$"
+          description: The fingerprint of the public key that was offered, or null.
+
+    EventRequest:
+      type: object
+      additionalProperties: false
+      required: [method, user_agent, referer, accept_language]
+      description: |
+        The headers were chosen by the client. They are shortened, and invalid and non-printable characters
+        (control characters, line separators, characters that change the writing direction, spaces other
+        than the ordinary space) are replaced;
+        treat them as claims, not facts.
+      properties:
+        method:
+          type: string
+          enum: [GET, HEAD]
+        user_agent:
+          type: string
+        referer:
+          type: string
+        accept_language:
+          type: string
+
+    EventQuery:
+      type: object
+      additionalProperties: false
+      required: [zone, prefix, qtype, transport]
+      properties:
+        zone:
+          type: string
+          description: The zone under which the name was queried.
+        prefix:
+          type: string
+          description: The labels in front of the trigger value, chosen by whoever sent the query.
+        qtype:
+          type: string
+          description: The type of the query, such as `A` or `TYPE65280`.
+        transport:
+          type: string
+          enum: [udp, tcp]
+
+    EventPage:
+      type: object
+      additionalProperties: false
+      required: [events]
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/Event"
+        next_cursor:
+          type: string
+          description: Cursor of the next page. Absent on the last page.
+
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: object
+          additionalProperties: false
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Stable, machine-readable error code.
+              examples: [invalid_request]
+            message:
+              type: string
+              description: Human-readable description without internal details.
+            request_id:
+              type: string
+              description: Correlates the response with the server log.
+
+  responses:
+    Unauthenticated:
+      description: The request carries no valid session or API key.
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    SecondFactorForbidden:
+      description: |
+        The password is wrong (`wrong_password`), the code is wrong (`wrong_code`), the password is
+        correct but the account is locked (`account_locked`), the request is not made with a session
+        (`forbidden`), or the request comes from another origin (`cross_origin`).
+      headers:
+        Retry-After:
+          description: Seconds until the lock ends. Only sent for a locked account.
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    SessionRequired:
+      description: The request is not made with a session, or it changes state and comes from another origin than the console (`cross_origin`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: The caller lacks the permission that the operation requires. The denial is recorded in the audit log, at most once per user, permission and minute, and separately for each API key.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ForbiddenWrite:
+      description: The caller lacks the permission that the operation requires, or the request comes from another origin than the console (`cross_origin`). A denial for a missing permission is recorded in the audit log, at most once per user, permission and minute, and separately for each API key.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    CrossOrigin:
+      description: |
+        The request changes state and comes from another origin than the console
+        (`cross_origin`). A browser that reaches the console under another
+        address than `NYKTUS_CONSOLE_URL` receives it for every such request.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InvalidRequest:
+      description: The request body is malformed or a field is invalid.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: The route does not exist or is not available to the caller.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: |
+        The request conflicts with the state of the accounts. The error code names the conflict:
+        `email_taken` (another account uses the address), `last_active_admin` (no active
+        administrator would remain), `own_account` (administrators cannot demote, deactivate or
+        delete their own account, or remove their own second factor through it), `invalid_state`
+        (the account cannot take the requested status or receive the requested link: an activation
+        link only for a pending account, a password reset link only for an active one),
+        `totp_enabled` (the account already has a TOTP factor), `totp_not_enabled` (it has none),
+        `no_totp_setup` (no setup of a TOTP factor waits for confirmation, or it expired),
+        `too_many_api_keys` (the team has the maximum number of API keys that have not expired) or
+        `oidc_account` (the account signs in through the identity provider, which manages its
+        password, second factor and role) or `not_oidc_account` (the account signs in with a
+        password and confirms with it, not through the identity provider).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    AlertChannelConflict:
+      description: |
+        The request conflicts with the alert channels. The error code names the conflict:
+        `name_taken` (another channel has the name), `too_many_alert_channels` (the installation has
+        the maximum number of channels) or `alert_channel_enabled` (only a disabled channel can be
+        deleted).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    AlertChannelUnprocessable:
+      description: |
+        The target of the URL is internal or does not resolve (`target_not_allowed`), a header was given
+        for a channel that is not a webhook (`header_not_allowed`), a URL for a channel of the type
+        `email` (`url_not_allowed`), or recipients for a channel of another type
+        (`recipients_not_allowed`).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    BodyTooLarge:
+      description: The request body exceeds the size limit of the operation.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    UnsupportedMediaType:
+      description: The request body is not application/json.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    InternalError:
+      description: The request failed on the server. The response carries a generic message and a request ID that correlates it with the server log.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unavailable:
+      description: A dependency, such as the database, is unreachable, or the server is too busy to answer in time. The `Retry-After` header suggests when to retry.
+      headers:
+        Retry-After:
+          description: Seconds to wait before a retry.
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
