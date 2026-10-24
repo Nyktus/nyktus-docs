@@ -60,6 +60,8 @@ export default defineConfig({
           items: [
             { text: 'Honeytokens', link: '/guides/honeytokens' },
             { text: 'DNS honeytokens', link: '/guides/dns-honeytokens' },
+            { text: 'Honeypots', link: '/guides/honeypots' },
+            { text: 'Sensor', link: '/guides/sensor' },
           ],
         },
       ],
