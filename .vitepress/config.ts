@@ -8,6 +8,40 @@ import { loadSpec, tagPages } from '../scripts/openapi.mjs'
 // The reference pages are generated from the specification, so the sidebar lists its tags.
 const apiTags = tagPages(loadSpec())
 
+// The guides and the security page share one sidebar. The security page keeps its address, because
+// published URLs are permanent.
+const guides = [
+  {
+    text: 'Decoys',
+    items: [
+      { text: 'Honeytokens', link: '/guides/honeytokens' },
+      { text: 'DNS honeytokens', link: '/guides/dns-honeytokens' },
+      { text: 'Honeypots', link: '/guides/honeypots' },
+      { text: 'Sensor', link: '/guides/sensor' },
+    ],
+  },
+  {
+    text: 'Stories',
+    items: [
+      { text: 'Scenarios', link: '/guides/scenarios' },
+      { text: 'Artifacts', link: '/guides/artifacts' },
+      { text: 'Deception catalog', link: '/guides/catalog' },
+      { text: 'Catalog reference', link: '/guides/catalog-reference' },
+    ],
+  },
+  {
+    text: 'Detection',
+    items: [
+      { text: 'Incidents', link: '/guides/incidents' },
+      { text: 'Alerting', link: '/guides/alerting' },
+    ],
+  },
+  {
+    text: 'Security',
+    items: [{ text: 'Stealth considerations', link: '/security/stealth' }],
+  },
+]
+
 // English is the root locale. To add a language:
 //   1. Add its entry to `locales` below, with its own `link`, `themeConfig.nav` and `sidebar`.
 //   2. Put its pages in a folder of the same name under `src/`, with the same paths as the
@@ -38,9 +72,8 @@ export default defineConfig({
 
     nav: [
       { text: 'Getting started', link: '/getting-started/introduction', activeMatch: '/getting-started/' },
-      { text: 'Guides', link: '/guides/honeytokens', activeMatch: '/guides/' },
+      { text: 'Guides', link: '/guides/honeytokens', activeMatch: '/guides/|/security/' },
       { text: 'Operate', link: '/operate/database', activeMatch: '/operate/' },
-      { text: 'Security', link: '/security/stealth', activeMatch: '/security/' },
       { text: 'API reference', link: '/api/', activeMatch: '/api/' },
     ],
 
@@ -56,33 +89,8 @@ export default defineConfig({
           ],
         },
       ],
-      '/guides/': [
-        {
-          text: 'Decoys',
-          items: [
-            { text: 'Honeytokens', link: '/guides/honeytokens' },
-            { text: 'DNS honeytokens', link: '/guides/dns-honeytokens' },
-            { text: 'Honeypots', link: '/guides/honeypots' },
-            { text: 'Sensor', link: '/guides/sensor' },
-          ],
-        },
-        {
-          text: 'Stories',
-          items: [
-            { text: 'Scenarios', link: '/guides/scenarios' },
-            { text: 'Artifacts', link: '/guides/artifacts' },
-            { text: 'Deception catalog', link: '/guides/catalog' },
-            { text: 'Catalog reference', link: '/guides/catalog-reference' },
-          ],
-        },
-        {
-          text: 'Detection',
-          items: [
-            { text: 'Incidents', link: '/guides/incidents' },
-            { text: 'Alerting', link: '/guides/alerting' },
-          ],
-        },
-      ],
+      '/guides/': guides,
+      '/security/': guides,
       '/operate/': [
         {
           text: 'Install',
@@ -120,12 +128,6 @@ export default defineConfig({
         {
           text: 'Operations',
           items: apiTags.map((tag) => ({ text: tag.title, link: tag.link })),
-        },
-      ],
-      '/security/': [
-        {
-          text: 'Security',
-          items: [{ text: 'Stealth considerations', link: '/security/stealth' }],
         },
       ],
     },

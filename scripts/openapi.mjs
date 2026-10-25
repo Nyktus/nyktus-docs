@@ -33,9 +33,16 @@ export function tagLink(name) {
   return `/api/reference/${name}`
 }
 
-// The tags in the order of the specification, each with the title and the link of its page.
+// Tags of the specification that get no page, because their operations serve the web console and
+// give an API client nothing to act on.
+export const unlistedTags = new Set(['session'])
+
+// The tags with a page in alphabetical order of their titles, each with the title and the link of its page.
 export function tagPages(spec) {
-  return spec.tags.map((tag) => ({ name: tag.name, title: tagTitle(tag.name), description: tag.description, link: tagLink(tag.name) }))
+  return spec.tags
+    .filter((tag) => !unlistedTags.has(tag.name))
+    .map((tag) => ({ name: tag.name, title: tagTitle(tag.name), description: tag.description, link: tagLink(tag.name) }))
+    .sort((a, b) => a.title.localeCompare(b.title, 'en'))
 }
 
 function deref(spec, node) {
@@ -262,7 +269,7 @@ function operationSection(spec, path, method, operation, pathParameters) {
 }
 
 // The Markdown page of one tag.
-export function renderTagPage(spec, tag, pin) {
+export function renderTagPage(spec, tag) {
   const title = tagTitle(tag.name)
   const sections = []
   for (const [path, item] of Object.entries(spec.paths)) {
@@ -285,8 +292,6 @@ export function renderTagPage(spec, tag, pin) {
     `# ${title}`,
     '',
     escapeText(tag.description),
-    '',
-    `This page is generated from the OpenAPI specification of Nyktus at \`${pin.ref.slice(0, 12)}\`. In the examples, \`<console-url>\` is the address of your console, \`$NYKTUS_API_KEY\` an API key, and a value in angle brackets a placeholder for yours.`,
     '',
   ]
   return header.join('\n') + '\n' + sections.join('\n\n') + '\n'

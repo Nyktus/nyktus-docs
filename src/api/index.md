@@ -19,6 +19,7 @@ Send requests to the address of your console, the one set as `NYKTUS_CONSOLE_URL
 - Every `GET` operation also answers `HEAD`, with the same access rules and no body.
 - Every response carries an `X-Request-ID` header. Quote it when you ask someone to look into a failed request: the server log and the audit log carry the same ID.
 - Authenticate with an API key or, in a browser, with a session. See [Authentication](/api/authentication).
+- In the examples, `<console-url>` is the address of your console, `$NYKTUS_API_KEY` an API key, and a value in angle brackets a placeholder for yours.
 
 The health endpoints `/livez` and `/readyz` are at the root and need no authentication; see [Health](/api/reference/health).
 
