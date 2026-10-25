@@ -3,9 +3,9 @@ title: Sign-in and sessions
 description: Set up the identity provider, understand how accounts and roles follow it, and know how sessions, second factors and lockouts behave.
 ---
 
-# Sign-in and sessions
+# Sign-in and accounts
 
-Nyktus offers local accounts with password authentication and optional a OTP as second factor, or you can configure SSO via OpenID Connect with your preferred identity provider.
+Nyktus offers local accounts with password authentication and an optional OTP as second factor, or you can configure SSO via OpenID Connect with your preferred identity provider.
 
 ## Identity provider
 
