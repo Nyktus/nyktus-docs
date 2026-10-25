@@ -3,11 +3,9 @@ title: Sign-in and sessions
 description: Set up the identity provider, understand how accounts and roles follow it, and know how sessions, second factors and lockouts behave.
 ---
 
-# Sign-in and sessions
+# Sign-in and accounts
 
-Users sign in to the console with an email address and a password, with a code from an authenticator app if they set up a second factor, or through your identity provider with OpenID Connect. A successful sign-in starts a session, which the browser keeps in a cookie. This page covers what an operator decides and what is not visible in the console: the identity provider, the roles that follow it, the sessions, and what happens after failed sign-ins.
-
-The forms themselves, such as changing a password or setting up a second factor, are in the console and need no explanation here.
+Nyktus offers local accounts with password authentication and an optional OTP as second factor, or you can configure SSO via OpenID Connect with your preferred identity provider.
 
 ## Identity provider
 
@@ -72,7 +70,3 @@ Every account can add a time-based one-time password (TOTP, RFC 6238) from an au
 - The lock limits how fast codes can be guessed, but does not end the guessing: whoever knows the password can try five codes every 15 minutes. Watch the audit log for repeated failures of `session.create` with the method `totp`, and change the password of an account that shows them.
 - Anyone who can reach the sign-in can lock an account, including the only administrator, for 15 minutes at a time. Keep the console off the public internet, and rate-limit sign-ins at the [reverse proxy](/operate/reverse-proxy).
 - Every sign-in and change of password, successful or not, and every sign-out is recorded in the audit log with the client address. A sign-in through the provider is recorded as `session.create` with the method `oidc`.
-
-## When the server is busy
-
-Password hashing needs 64 MiB of memory per operation, so the number of concurrent operations is limited. A request that hashes a password, such as a sign-in, setup, activation, password change or reset, and cannot be served within 10 seconds gets `503 Service Unavailable` with a `Retry-After` header.

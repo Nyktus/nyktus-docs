@@ -110,6 +110,6 @@ Without a worker, expired rows stay, and so does every sign-in through the ident
 
 The tables `sessions`, `oidc_logins`, `event_jobs` and `alert_deliveries` change all the time while few of their rows live at once. The migrations lower their autovacuum thresholds, so that dead rows go before they make up much of a table. They need no tuning.
 
-## Back up
+## Backup
 
-Back up the database and the encryption keys, and keep the keys separately. The database alone does not reveal the secrets it holds, such as the URLs of alert channels and the secrets of second factors, and for the same reason it cannot restore them without the keys. A backup of the database also holds events beyond the retention, so give backups a retention that fits `NYKTUS_EVENT_RETENTION_DAYS`.
+Create a Backup of the database and the encryption keys regularly, and keep the keys separately. The database alone does not reveal the secrets it holds, such as the URLs of alert channels and the secrets of second factors, and for the same reason it cannot restore them without the keys. A backup of the database also holds events beyond the retention, so give backups a retention that fits `NYKTUS_EVENT_RETENTION_DAYS`.

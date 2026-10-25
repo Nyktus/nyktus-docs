@@ -5,7 +5,7 @@ description: What Nyktus is, what you place with it, and what deception cannot d
 
 # What Nyktus does
 
-Nyktus places decoys that have no legitimate use and alerts you when someone touches one. It runs on your own infrastructure and needs nothing but PostgreSQL. This page explains the idea, the parts and the limits, so that you can decide whether Nyktus fits.
+Nyktus creates decoys (Honeypots & Honeytokens) that have no legitimate use and alerts you when someone touches them. It runs on your own cloud and on-premises infrastructure. This page explains the idea, the parts and detection limits of Nyktus.
 
 ::: warning Early development
 Nyktus is not ready for production use. Interfaces, configuration and the database schema change without notice until the first tagged release.
@@ -13,7 +13,7 @@ Nyktus is not ready for production use. Interfaces, configuration and the databa
 
 ## Why decoys instead of more logs
 
-Log-based detection collects everything and searches for the needle afterwards. Deception works the other way round: you place signals that nobody has a reason to use. Nobody opens a decoy SSH configuration by accident, and nobody resolves a DNS name that exists only inside a backup archive. When a decoy fires, someone is where they should not be.
+Log-based detection collects everything and searches for the needle afterwards. Deception works the other way round: you place signals that nobody has a reason to use. Nobody opens a decoy SSH configuration by accident, and nobody resolves a DNS name that exists only inside a backup archive. When a decoy fires, someone is where they should not be, generating a high fidelity alert.
 
 So the alerts are few, and each one deserves attention. That suits a team without a security operations center, and it makes Nyktus a low-noise source for a team that already runs a SIEM.
 
