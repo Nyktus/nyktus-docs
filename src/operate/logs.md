@@ -27,12 +27,12 @@ Requests without valid credentials, such as a failed setup attempt or a request 
 
 ## Trigger
 
-The trigger writes one record with the message `trigger: request` per request. It never logs the requested path, because the path holds the value of a honeytoken, and never the secret of a [sensor](/guides/honeypots#what-a-sensor-reports) or anything that a sensor or an attacker chose, such as user names or search filters.
+The trigger writes one record with the message `trigger: request` per request. It never logs the requested path, because the path holds the value of a honeytoken, and never the secret of a [sensor](/guides/honeypots#what-a-sensor-reports) or anything that a sensor or an attacker chose, such as user names, search filters or the body of a `POST`.
 
 | Field | Content |
 |---|---|
 | `method` | HTTP method. |
-| `outcome` | `recorded` (an event was stored, or a heartbeat accepted), `unknown` (the value belongs to no honeytoken, or the secret to no honeypot), `disabled`, `limited` (the honeytoken or honeypot reached its limit of events), `duplicate` (a session had been recorded before), `rejected` (a report that the trigger does not accept; see `reason`), `failed` (recording failed; see the error record before it), or `not_looked_up` (the path holds no value, or the method is not recorded; a `POST` to `/` without a secret of the form of one). |
+| `outcome` | `recorded` (an event was stored, or a heartbeat accepted), `unknown` (the value belongs to no honeytoken, or the secret to no honeypot), `disabled`, `limited` (the honeytoken or honeypot reached its limit of events), `duplicate` (a session had been recorded before), `rejected` (a report that the trigger does not accept; see `reason`), `failed` (recording failed; see the error record before it), or `not_looked_up` (the path holds no value, or the method is none of `GET`, `HEAD` and `POST`; a `POST` to `/` without a secret of the form of one). |
 | `honeytoken_id` | The identifier of the honeytoken, unless its value is unknown. |
 | `report` | `session` or `heartbeat`, for a report of a sensor that the trigger read. |
 | `honeypot_id` | The identifier of the honeypot, unless its secret is unknown. |
