@@ -31,7 +31,7 @@ Red teams, insiders and targeted intruders do this. Weigh the effort against who
 
 **On the network.** An intruder who opens or loads the URL sends a request to the trigger host, which their own proxy, firewall and EDR logs show afterwards. The request is already recorded: Nyktus records it even if the client closes the connection at once.
 
-**When someone probes the trigger.** The trigger answers by the form of the request, not by what it knows. A URL that ends with `.gif` gets a one-pixel image, and every other URL, `/` and `/robots.txt` included, gets a redirect. An unknown value, a disabled honeytoken and a value that fired look the same. No header names Nyktus, and every answer is `Cache-Control: no-store`.
+**When someone probes the trigger.** The trigger answers by the form of the request, not by what it knows. A `POST` gets `200` without a body. Of the other requests, a URL that ends with `.gif` gets a one-pixel image, and every other URL, `/` and `/robots.txt` included, gets a redirect. An unknown value, a disabled honeytoken and a value that fired look the same. No header names Nyktus, and every answer is `Cache-Control: no-store`.
 
 - Set `NYKTUS_TRIGGER_DEFAULT_REDIRECT` to a page that fits the host name. Nyktus has no default for it, because a built-in target would be the same in every installation and so a fingerprint.
 - The `redirect_url` of a `web_url` is visible to whoever opens the URL. Choose a public page that fits the placement, never an internal address, which would reveal an internal host name.
@@ -84,7 +84,7 @@ No measure makes a decoy invisible to an intruder who controls their own DNS and
 |---|---|---|
 | reads a file with a honeytoken URL | the host name of your trigger | use a neutral domain of its own; use a `web_image` or a QR code where the URL should not be read |
 | opens or loads the URL | a request to the trigger host in their own logs | accept it; the request is recorded either way |
-| probes the trigger host | the same redirect for every path, no product header | choose a default redirect that fits; keep the proxy from adding headers |
+| probes the trigger host | the same redirect for every path, the same empty `200` for every `POST`, no product header | choose a default redirect that fits; keep the proxy from adding headers |
 | looks up the domain | registration data, hosting, certificate | use a neutral domain; use a wildcard certificate |
 | reads a file with a DNS name | a name under your zone | use a neutral zone that fits the placement |
 | queries the zone | name servers, the same answer for every name | name the name servers neutrally; use a DNS role of its own for zones that must not be linked |

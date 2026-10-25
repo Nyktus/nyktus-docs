@@ -68,7 +68,7 @@ Events are listed by the time they were recorded (`recorded_at`), not by the tim
 
 ## Personal data
 
-Events contain personal data: the address of the client, for DNS the address of the resolver, for a honeypot the address of the attacker, the `User-Agent`, `Referer` and `Accept-Language` headers, and in the event of a session what the attacker typed, such as user names and search filters. Passwords are never stored, only their length. Incidents and alerts hold none of it: they name the scenario, honeytoken or honeypot, the times, the severity and the techniques.
+Events contain personal data: the address of the client, for DNS the address of the resolver, for a honeypot the address of the attacker, the `User-Agent`, `Referer` and `Accept-Language` headers, for a `POST` the start of its body, and in the event of a session what the attacker typed, such as user names and search filters. Passwords are never stored, only their length. Incidents and alerts hold none of it: they name the scenario, honeytoken or honeypot, the times, the severity and the techniques.
 
 Every read of events is recorded in the audit log as `events.read`, at most once per user or key and minute. A read that cannot be recorded returns no events.
 
