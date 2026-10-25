@@ -5,7 +5,7 @@ description: The roles of the Nyktus server, the sensor, and where each one runs
 
 # Architecture
 
-Nyktus is one server binary, `nyktus`, and one sensor binary, `nyktus-sensor`. PostgreSQL is the only other component. This page shows the parts and what each one may reach, so that you can decide which hosts run which role.
+Nyktus is one server binary, `nyktus`, and one sensor binary, `nyktus-sensor`. All data are stored in PostgreSQL. This page shows the parts and what each one may reach, so that you can decide which hosts run which role.
 
 <ArchitectureDiagram />
 

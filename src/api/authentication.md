@@ -23,7 +23,7 @@ Some operations admit sessions only. A key that calls one receives `403`. Keys n
 
 ## Creating a key
 
-Only administrators create keys, and only while signed in with a session. They confirm the request with their password, or sign in again at the identity provider within the five minutes before. A key outlives the session that created it, which is why the confirmation is required.
+Only administrators can create API keys.
 
 - **The secret is shown once.** Nyktus keeps only a hash of it. Copy it from the response; a lost key cannot be recovered, only replaced.
 - **Every key expires.** The day is required, from tomorrow to just under three years ahead, counted in UTC. The key stops working at the start of that day. Choose a period that fits your rotation policy. Nyktus does not remind anyone before a key expires.
