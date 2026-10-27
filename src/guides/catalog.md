@@ -17,7 +17,7 @@ The [catalog reference](/guides/catalog-reference) lists every deception with th
 
 | Field | Meaning |
 |---|---|
-| `category` | What the deception pretends to be: `identity`, `network`, `data`, `endpoint` or `application`. |
+| `category` | What the deception pretends to be: `identity`, `network`, `data`, `endpoint`, `application` or `cloud`. |
 | `techniques` | The MITRE ATT&CK techniques that a trigger of the deception suggests. |
 | `engage_activities` | The activities of MITRE Engage that the deception carries out, such as `EAC0005` (Lures) and `EAC0011` (Pocket Litter). |
 | `honeytokens` | The honeytokens that applying it creates, with the techniques and severity each receives. A deception raises the severity above the default of the type for a honeytoken that nobody but an intruder has a reason to use, such as the host in a `.netrc`. |

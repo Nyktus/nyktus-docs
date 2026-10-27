@@ -19,6 +19,7 @@ const guides = [
       { text: 'Honeypots', link: '/guides/honeypots' },
       { text: 'Sensor', link: '/guides/sensor' },
       { text: 'Log forwarding', link: '/guides/log-forwarding' },
+      { text: 'Cloud webhooks', link: '/guides/cloud-webhooks' },
     ],
   },
   {
