@@ -7,7 +7,7 @@ description: Send the Windows events that requests for decoy accounts raise on a
 
 A decoy account in Active Directory raises no request that Nyktus can see. Whoever asks a domain controller for a ticket for it, or tries to sign in as it, leaves a record in the Security log of that controller. After this page, a log forwarder on each domain controller reports those records to Nyktus, and the first one opens an incident.
 
-The page uses [Fluent Bit](https://docs.fluentbit.io) and the story *Decoy accounts in the directory* of the [deception catalog](/guides/catalog), whose guide names the account, the event and the test for each decoy. It assumes that you applied the story to a scenario and that you administer the domain controllers.
+The page uses [Fluent Bit](https://docs.fluentbit.io) and the story [Decoy accounts in the directory](/guides/catalog-reference#ad-decoy-accounts) of the [deception catalog](/guides/catalog), whose guide names the account, the event and the test for each decoy. It assumes that you applied the story to a scenario and that you administer the domain controllers.
 
 ## How the report reaches Nyktus
 
