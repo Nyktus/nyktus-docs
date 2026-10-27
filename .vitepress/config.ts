@@ -18,6 +18,7 @@ const guides = [
       { text: 'DNS honeytokens', link: '/guides/dns-honeytokens' },
       { text: 'Honeypots', link: '/guides/honeypots' },
       { text: 'Sensor', link: '/guides/sensor' },
+      { text: 'Log forwarding', link: '/guides/log-forwarding' },
     ],
   },
   {
