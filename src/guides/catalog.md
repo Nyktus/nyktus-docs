@@ -23,7 +23,20 @@ The [catalog reference](/guides/catalog-reference) lists every deception with th
 | `honeytokens` | The honeytokens that applying it creates, with the techniques and severity each receives. A deception raises the severity above the default of the type for a honeytoken that nobody but an intruder has a reason to use, such as the host in a `.netrc`. |
 | `persona` | The values you enter so that the files fit your environment. `host` is a host name, `name` an account name, and `text` free text that appears only in files a person reads. `example` only illustrates a value. |
 | `secrets` | Random values, such as passwords, that Nyktus generates when you apply the deception. |
-| `artifacts` | The files it renders. A deception without artifacts consists of its guide, for example because you write the document yourself. |
+| `artifacts` | The artifacts it recommends, each with its file name and format. Applying the deception renders them, unless you choose a selection. A deception without artifacts consists of its guide, for example because you write the document yourself. |
+
+## Artifacts of the catalog
+
+An artifact is a template of a file that you place to make a scenario believable, such as an SSH configuration. A deception recommends artifacts, and each artifact also exists on its own, so that you can add one to a scenario later, see [Add a deception or an artifact](/guides/scenarios#add-a-deception-or-an-artifact).
+
+[`GET /api/v1/catalog/artifacts`](/api/reference/catalog#listCatalogArtifacts) returns the whole list, ordered by identifier and not paged. [`GET /api/v1/catalog/artifacts/<id>`](/api/reference/catalog#getCatalogArtifact) returns one with the members below. Add `?lang=de` for German texts.
+
+| Field | Meaning |
+|---|---|
+| `file_name`, `format` | The name under which the file is downloaded, and its format, see [Artifacts](/guides/artifacts#what-an-artifact-holds). |
+| `slots` | The places for the trigger of a honeytoken, each with the types it accepts (`web_url`, `web_image` or `dns`) and whether it is `optional`. A slot bound to a honeytoken makes the file a lure, because whoever uses the file triggers the honeytoken. A file without a bound slot is pocket litter: it gives the story a believable surrounding and raises no event itself. |
+| `persona` | The values it asks for, as for a deception. |
+| `secrets` | The random values, such as passwords, that it generates. Every artifact generates its own, so two files of one story do not share a password. |
 
 ## Apply a deception
 
@@ -41,13 +54,14 @@ The key needs `scenarios:write`, which covers the honeytokens and artifacts that
 
 - `name` and `notes` name the new scenario, with the rules of a [scenario](/guides/scenarios).
 - `language` is `en` by default, or `de`. It sets the language of the guide and of the names of the honeytokens.
+- `artifacts` names the artifacts to create, each one that the deception recommends. Without it, all of them are created; an empty list creates none.
 - `persona` must hold a value for every value of the deception, by its key, and nothing else. There are no defaults, because a value that every installation shares would identify the files as decoys. Each value must match its kind: a `host` is a host name in lowercase letters, digits, hyphens and dots, a `name` is an account name of up to 64 letters, digits, dots, hyphens and underscores, and a `text` is one line of up to 200 characters.
 
 What you get next:
 
 - The honeytokens belong to the scenario, are enabled, and have the techniques and the severity of the deception.
 - The artifacts are rendered with the URLs of the honeytokens under the address of your trigger, and the names of DNS honeytokens under the first zone of `NYKTUS_DNS_ZONES`. Download each with [`GET /api/v1/artifacts/<id>/content`](/api/reference/artifacts#downloadArtifact), and record where you placed it. See [Artifacts](/guides/artifacts).
-- [`GET /api/v1/scenarios/<id>/guide`](/api/reference/scenarios#getScenarioGuide) returns the guide for this scenario.
+- [`GET /api/v1/scenarios/<id>/guide`](/api/reference/scenarios#getScenarioGuide) returns the guide of the deception for this scenario, see [The guide](/guides/scenarios#the-guide).
 
 ### What can go wrong
 
@@ -70,11 +84,12 @@ This documentation also serves the catalog as a file, [`/deception-catalog.json`
 
 | Member | Content |
 |---|---|
-| `schema_version` | `1`, the version of the format of the file. |
+| `schema_version` | `2`, the version of the format of the file. |
 | `license`, `notice` | The license of the deceptions, CC BY-SA 4.0, and the notices of the deceptions and of the names from MITRE ATT&CK and MITRE Engage. Keep them when you pass the file on. |
 | `attack_version`, `engage_version` | The versions of ATT&CK and Engage that the identifiers come from. |
 | `techniques`, `engage_activities` | The name of every technique and activity that the deceptions use, by identifier. |
-| `deceptions` | By language, `en` and `de`, every deception as the API returns it, ordered by identifier. |
+| `deceptions` | By language, `en` and `de`, every deception as the API returns it, ordered by identifier. Its `artifacts` name the artifacts it recommends by `key`. |
+| `artifacts` | By language, `en` and `de`, every artifact as the API returns it, ordered by identifier. |
 
 ## Who can read the catalog
 
