@@ -119,6 +119,8 @@ outputs:
     format: json
 ```
 
+For the domain controllers of Active Directory, see [Forward the logs of domain controllers](/guides/log-forwarding).
+
 ### What the sender sees
 
 Every `POST` to every path gets the same `200` without a body, whether the value is live, unknown, disabled or over its limit, and whether recording worked or failed. Senders repeat what they do not see succeed, and an answer that differed by value would show whoever finds the URL which values are live.
