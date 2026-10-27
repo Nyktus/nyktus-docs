@@ -24,12 +24,12 @@ Each story has one honeytoken, `Webhook`, with the severity high, and no files: 
 
 | Story | Decoy in the account | What raises the report |
 |---|---|---|
-| `aws-iam-user-key` | An IAM user without any permission, with an access key that you place in a file | Any call signed with the key |
-| `aws-secrets-manager-secret` | A secret with invented credentials | Reading or describing it |
-| `aws-ssm-parameter` | A parameter of the type `SecureString` | Reading it by name |
-| `aws-assume-role` | A role that trusts the account and holds no permission | Trying to assume it, also when AWS refuses |
-| `azure-key-vault-secret` | A secret with a random value in an existing key vault | Reading its value |
-| `azure-storage-blob` | A private container with a file of random bytes, in an existing storage account | Listing or reading the container |
+| [`aws-iam-user-key`](/guides/catalog-reference#aws-iam-user-key) | An IAM user without any permission, with an access key that you place in a file | Any call signed with the key |
+| [`aws-secrets-manager-secret`](/guides/catalog-reference#aws-secrets-manager-secret) | A secret with invented credentials | Reading or describing it |
+| [`aws-ssm-parameter`](/guides/catalog-reference#aws-ssm-parameter) | A parameter of the type `SecureString` | Reading it by name |
+| [`aws-assume-role`](/guides/catalog-reference#aws-assume-role) | A role that trusts the account and holds no permission | Trying to assume it, also when AWS refuses |
+| [`azure-key-vault-secret`](/guides/catalog-reference#azure-key-vault-secret) | A secret with a random value in an existing key vault | Reading its value |
+| [`azure-storage-blob`](/guides/catalog-reference#azure-storage-blob) | A private container with a file of random bytes, in an existing storage account | Listing or reading the container |
 
 None of the decoys holds a real credential or a permission. The guides say what each one changes in the account and how to remove it.
 
