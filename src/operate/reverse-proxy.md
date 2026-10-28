@@ -30,14 +30,78 @@ The [stealth considerations](/security/stealth) explain what an intruder can see
 
 ## The client address
 
-Nyktus records the address of the client in the audit log and in the events of honeytokens. By default it uses the address of the connection, which behind a proxy is the address of the proxy. List your proxies in `NYKTUS_TRUSTED_PROXIES`, and Nyktus reads the `X-Forwarded-For` header from right to left, skips the addresses of trusted proxies and takes the first other address as the client. A chain of several proxies works as long as all of them are listed.
+Nyktus records the address of the client in the audit log and in the events of honeytokens. Behind a proxy, it records the address of the proxy unless you list your proxies in `NYKTUS_TRUSTED_PROXIES`.
 
 - Configure each proxy to append the address it received the request from to `X-Forwarded-For`, which most proxies do by default. A proxy that replaces the header works too.
-- List only proxies you operate. A client that connects directly cannot set its own address, because Nyktus reads the header only from trusted addresses.
-- Write ranges in their canonical form, such as `10.0.0.0/8`, not `10.0.0.1/8`, and IPv4 ranges in IPv4 notation. Entries may carry a port, such as `192.0.2.1:4711`. `X-Real-IP` is ignored.
+- List every proxy in the chain, and only proxies you operate.
 
-See [`NYKTUS_TRUSTED_PROXIES`](/operate/configuration#client-addresses) for the details.
+How Nyktus reads the header, how to write the ranges and what it ignores are described in [Client addresses](/operate/configuration#client-addresses).
 
 ## The DNS role
 
 The DNS role is not an HTTP service and needs no proxy. Resolvers reach it on port 53 over UDP and TCP. Do not put a resolver or a load balancer in front that rewrites the source address, because the event records the address that sent the query. See [DNS honeytokens](/guides/dns-honeytokens#delegate-a-zone).
+
+## Example: nginx
+
+The console and the trigger run on different hosts, so each host gets its own file. Both assume that Nyktus listens on the loopback address of the same host, which is the default, and that the certificate and the key exist. Replace the host names and the paths.
+
+The console, in `/etc/nginx/conf.d/nyktus.conf` on the internal host. The `map` selects the six sign-in routes, so that the rate limit counts nothing else. The web console reads `GET /api/v1/session` to learn whether you are signed in, so that route must not be limited:
+
+```nginx
+# Count only the sign-in routes, per client address. An empty key is not counted.
+map "$request_method $uri" $signin_client {
+    default                                "";
+    "POST /api/v1/session"                 $binary_remote_addr;
+    "POST /api/v1/session/second-factor"   $binary_remote_addr;
+    "GET /api/v1/oidc/authorize"           $binary_remote_addr;
+    "GET /api/v1/oidc/callback"            $binary_remote_addr;
+    "POST /api/v1/activation"              $binary_remote_addr;
+    "POST /api/v1/password-reset"          $binary_remote_addr;
+}
+
+limit_req_zone $signin_client zone=nyktus_signin:10m rate=10r/m;
+
+server {
+    listen 443 ssl;
+    server_name nyktus.example.com;
+    server_tokens off;
+
+    ssl_certificate     /etc/ssl/nyktus/fullchain.pem;
+    ssl_certificate_key /etc/ssl/nyktus/privkey.pem;
+
+    location / {
+        limit_req zone=nyktus_signin burst=5 nodelay;
+        limit_req_status 429;
+
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+The trigger, in `/etc/nginx/conf.d/nyktus-trigger.conf` on the host that the internet reaches. It adds nothing to the answers of Nyktus:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name t.example.net;
+    server_tokens off;
+
+    ssl_certificate     /etc/ssl/nyktus/fullchain.pem;
+    ssl_certificate_key /etc/ssl/nyktus/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+Set `NYKTUS_TRUSTED_PROXIES=127.0.0.1` for both roles. nginx passes the `Origin` header on without change. The rate limit lets a client make 10 sign-in requests per minute, plus a burst of 5, and answers the rest with `429`. Choose values that fit your users, and remember that five failed sign-ins lock an account.
+
+Two things to know about the result:
+
+- `server_tokens off` removes the version of nginx from the `Server` header, but the header still says `nginx`. Nyktus is not named. Removing the header altogether needs a module that stock nginx does not include.
+- nginx answers some malformed requests itself, with an error page that names nginx. The page does not name Nyktus.

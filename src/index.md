@@ -2,8 +2,8 @@
 layout: home
 title: Nyktus Docs
 hero:
-  text: Cyber Deception Platform Docs.
-  tagline: Nyktus creates honeytokens and honeypots that you can place across your infrastructure and alerts you when someone touches one.
+  text: Documentation for the Nyktus deception platform.
+  tagline: Nyktus creates honeytokens and honeypots for you to place across your infrastructure, and alerts you when someone touches one.
   actions:
     - theme: brand
       text: What Nyktus does

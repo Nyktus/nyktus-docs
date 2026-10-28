@@ -15,7 +15,7 @@ Administrators create and manage the accounts of the console. There is no public
 | `user` | Configures honeypots, honeytokens, scenarios and artifacts, and works with incidents. |
 | `viewer` | Reads decoys, scenarios, artifacts, incidents, events and the deception catalog. Does not triage incidents and does not read the audit log. |
 
-Decoys, scenarios and API keys belong to the team, not to the account that created them. You cannot demote, deactivate or delete your own account, nor change the role of an account of the identity provider. A new role or status ends every session of the account.
+[Roles and permissions](/operate/permissions) lists what each role may do. Decoys, scenarios and API keys belong to the team, not to the account that created them. You cannot demote, deactivate or delete your own account, nor change the role of an account of the identity provider. A new role or status ends every session of the account.
 
 At least one active administrator always remains. Nyktus rejects every change that would demote, deactivate or delete the last one, also when two administrators try it at the same time. To hand over the installation, create an account for the new administrator, and let the new administrator remove the old account.
 

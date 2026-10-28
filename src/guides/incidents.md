@@ -61,7 +61,7 @@ Members you leave out stay unchanged. Notes and overrides can still change after
 
 Every role reads incidents and events. An API key needs `incidents:read` or `events:read`.
 
-- [`GET /api/v1/incidents`](/api/reference/incidents#listIncidents) lists incidents from the most recently opened to the oldest. `status` narrows the list to one or more statuses separated by commas, such as `status=open,acknowledged` for everything that is not closed. `resource_id` narrows it to one scenario, honeytoken or honeypot, and `resource_type` of an incident says which.
+- [`GET /api/v1/incidents`](/api/reference/incidents#listIncidents) lists incidents from the most recently opened to the oldest. `status` narrows the list to one or more statuses separated by commas, such as `status=open,acknowledged` for everything that is not closed. `resource_id` narrows it to one scenario, honeytoken or honeypot. The `resource_type` of an incident says which kind it is.
 - [`GET /api/v1/events`](/api/reference/events#listEvents) lists events from the most recently recorded to the oldest. `incident_id` narrows the list to the events of one incident. To read the events of a decoy, list its incidents and those of its scenario, then their events.
 
 Events are listed by the time they were recorded (`recorded_at`), not by the time the request arrived (`occurred_at`), because the DNS role records a query up to five minutes after it arrived. Events recorded meanwhile do not shift the following pages. If you collect events regularly, for example into a SIEM, start each read a few seconds before the newest event you have and skip the identifiers you already know, because an event is listed by the time it was written, which can precede the commit of a slow transaction.
@@ -72,7 +72,7 @@ Events contain personal data: the address of the client, for DNS the address of 
 
 Every read of events is recorded in the audit log as `events.read`, at most once per user or key and minute. A read that cannot be recorded returns no events.
 
-Nyktus records these data to detect and investigate intrusions into your network. In the EU, this is usually covered by the legitimate interest in the security of networks and information (Art. 6(1)(f) and Recital 49 GDPR). Record it in your records of processing activities. Triage needs events, so every role reads them. Grant accounts, `viewer` included, only to people who triage, and give integrations that do not need client addresses keys without `events:read`.
+Nyktus records these data to detect and investigate intrusions into your network. In the EU, this is usually covered by the legitimate interest in the security of networks and information (Art. 6(1)(f) and Recital 49 GDPR). Record it in your records of processing activities, and confirm the legal basis with your data protection officer. Triage needs events, so every role reads them. Grant accounts, `viewer` included, only to people who triage, and give integrations that do not need client addresses keys without `events:read`.
 
 ## Retention
 

@@ -5,15 +5,15 @@ description: What Nyktus is, what you place with it, and what deception cannot d
 
 # What Nyktus does
 
-Nyktus creates decoys (Honeypots & Honeytokens) that have no legitimate use and alerts you when someone touches them. It runs on your own cloud and on-premises infrastructure. This page explains the idea, the parts and detection limits of Nyktus.
+Nyktus creates decoys (honeytokens and honeypots) that have no legitimate use, and alerts you when someone touches one. You run it on your own infrastructure, in the cloud or on premises. This page explains the idea, the parts and the detection limits of Nyktus.
 
-::: warning Early development
-Nyktus is not ready for production use. Interfaces, configuration and the database schema change without notice until the first tagged release.
+::: warning Version 0.1
+Version 0.1 is the first release of Nyktus and early software. Interfaces, configuration and the database schema can change between releases until version 1.0, so read the release notes before you update.
 :::
 
 ## Why decoys instead of more logs
 
-Log-based detection collects everything and searches for the needle afterwards. Deception works the other way round: you place signals that nobody has a reason to use. Nobody opens a decoy SSH configuration by accident, and nobody resolves a DNS name that exists only inside a backup archive. When a decoy fires, someone is where they should not be, generating a high fidelity alert.
+Log-based detection collects everything and searches for the needle afterwards. Deception works the other way round: you place signals that nobody has a reason to use. Nobody opens a decoy SSH configuration by accident, and nobody resolves a DNS name that exists only inside a backup archive. When a decoy fires, someone is where they should not be, and the alert is a high-fidelity one.
 
 So the alerts are few, and each one deserves attention. That suits a team without a security operations center, and it makes Nyktus a low-noise source for a team that already runs a SIEM.
 
@@ -42,4 +42,5 @@ An intruder who recognizes a decoy can also avoid it, so a decoy that looks like
 
 - [Concepts](/getting-started/concepts) defines the terms that every page uses.
 - [Architecture](/getting-started/architecture) shows the parts of Nyktus and where each one runs.
-- The [quickstart](/getting-started/quickstart) builds Nyktus and takes a honeytoken through to an incident.
+- The [quickstart](/getting-started/quickstart) builds Nyktus and takes a honeytoken and a honeypot through to an incident and an alert.
+- [Deploy](/operate/deploy) sets up an installation that holds real data.

@@ -16,6 +16,7 @@ const guides = [
     items: [
       { text: 'Honeytokens', link: '/guides/honeytokens' },
       { text: 'DNS honeytokens', link: '/guides/dns-honeytokens' },
+      { text: 'Report with a POST', link: '/guides/post-reports' },
       { text: 'Honeypots', link: '/guides/honeypots' },
       { text: 'Sensor', link: '/guides/sensor' },
       { text: 'Log forwarding', link: '/guides/log-forwarding' },
@@ -58,6 +59,9 @@ export default defineConfig({
   cleanUrls: true,
   lastUpdated: true,
 
+  // Lets search engines find every page of docs.nyktus.org.
+  sitemap: { hostname: 'https://docs.nyktus.org' },
+
   // One light theme: the plates for code are dark in both cases.
   appearance: false,
 
@@ -75,7 +79,7 @@ export default defineConfig({
     nav: [
       { text: 'Getting started', link: '/getting-started/introduction', activeMatch: '/getting-started/' },
       { text: 'Guides', link: '/guides/honeytokens', activeMatch: '/guides/|/security/' },
-      { text: 'Operate', link: '/operate/database', activeMatch: '/operate/' },
+      { text: 'Operate', link: '/operate/deploy', activeMatch: '/operate/' },
       { text: 'API reference', link: '/api/', activeMatch: '/api/' },
     ],
 
@@ -97,6 +101,7 @@ export default defineConfig({
         {
           text: 'Install',
           items: [
+            { text: 'Deploy', link: '/operate/deploy' },
             { text: 'Database setup', link: '/operate/database' },
             { text: 'First start', link: '/operate/first-start' },
             { text: 'Reverse proxy', link: '/operate/reverse-proxy' },
@@ -108,6 +113,7 @@ export default defineConfig({
             { text: 'Configuration', link: '/operate/configuration' },
             { text: 'Sign-in and sessions', link: '/operate/sign-in' },
             { text: 'Accounts', link: '/operate/users' },
+            { text: 'Roles and permissions', link: '/operate/permissions' },
           ],
         },
         {
@@ -117,6 +123,10 @@ export default defineConfig({
             { text: 'Logs', link: '/operate/logs' },
             { text: 'Metrics', link: '/operate/metrics' },
           ],
+        },
+        {
+          text: 'Secure',
+          items: [{ text: 'Hardening checklist', link: '/operate/hardening' }],
         },
       ],
       '/api/': [
