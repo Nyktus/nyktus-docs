@@ -5,7 +5,7 @@ description: Create the PostgreSQL roles and database that Nyktus needs, and wha
 
 # Database setup
 
-Nyktus stores all state in PostgreSQL 16 or later. Each server role connects with a login of its own that holds only the privileges the role needs, and migrations run as a separate owner. This page sets that up for an installation you operate. To try Nyktus on one machine first, the [quickstart](/getting-started/quickstart) runs the same steps against a throwaway database.
+Nyktus stores all state in PostgreSQL 16 or later. Each server role connects with a login of its own that holds only the privileges the role needs, and migrations run as a separate owner. This page sets that up for an installation you operate; [Deploy](/operate/deploy) shows how to run the roles afterwards. To try Nyktus on one machine first, the [quickstart](/getting-started/quickstart) runs the same steps against a throwaway database.
 
 ## The roles
 
@@ -15,7 +15,7 @@ Nyktus stores all state in PostgreSQL 16 or later. Each server role connects wit
 | `nyktus_console`, `nyktus_trigger`, `nyktus_dns`, `nyktus_worker` | Group, created by `roles.sql` | Receive the privileges of their server role through the migrations. |
 | One login for each role you run (any name) | Login, member of the group | The server role connects with it, through `NYKTUS_CONSOLE_DATABASE_URL`, `NYKTUS_TRIGGER_DATABASE_URL`, `NYKTUS_DNS_DATABASE_URL` and `NYKTUS_WORKER_DATABASE_URL`. |
 
-The point of this separation is what an internet-facing role cannot do. The trigger and the DNS role can read no table. Each hands one requested value or secret to a database function of its own, which records the request and returns only what the answer and the log need. Whoever takes over the host of the trigger can test a URL, a name or a secret they already know, but cannot list the decoys. A login of the trigger cannot record DNS queries, and the other way round. The worker reads events and writes incidents and alerts, but reads no honeytokens, accounts or audit entries. The console cannot read back the secrets of alert channels. Migrations grant privileges to the group roles and never create roles, so the owner needs no `CREATEROLE`.
+The point of this separation is what an internet-facing role cannot do, which [Architecture](/getting-started/architecture#what-the-internet-facing-roles-can-reach) explains. In short, the trigger and the DNS role can read no table, and each can record only its own kind of request: a login of the trigger cannot record DNS queries, and the other way round. Migrations grant privileges to the group roles and never create roles, so the owner needs no `CREATEROLE`.
 
 Role names are global to a PostgreSQL cluster. Run one Nyktus installation per cluster.
 
@@ -112,4 +112,4 @@ The tables `sessions`, `oidc_logins`, `event_jobs` and `alert_deliveries` change
 
 ## Backup
 
-Create a Backup of the database and the encryption keys regularly, and keep the keys separately. The database alone does not reveal the secrets it holds, such as the URLs of alert channels and the secrets of second factors, and for the same reason it cannot restore them without the keys. A backup of the database also holds events beyond the retention, so give backups a retention that fits `NYKTUS_EVENT_RETENTION_DAYS`.
+Back up the database and the encryption keys regularly, and keep the keys separately. The database alone does not reveal the secrets it holds, such as the URLs of alert channels and the secrets of second factors, and for the same reason it cannot restore them without the keys. A backup of the database also holds events beyond the retention, so give backups a retention that fits `NYKTUS_EVENT_RETENTION_DAYS`.

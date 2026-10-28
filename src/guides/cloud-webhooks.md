@@ -11,7 +11,7 @@ The page explains the common pattern. The commands are in the guide of each stor
 
 ## How the report reaches Nyktus
 
-The provider writes an audit record when someone uses the decoy. A rule in your account selects the records about the decoy, shortens them and sends them with a `POST` to the URL of a `web_url` honeytoken. Nobody opens that URL; it is only the address of the report. Nyktus records the request like any other `POST`, see [Report with a POST](/guides/honeytokens#report-with-a-post), and opens an incident for the scenario.
+The provider writes an audit record when someone uses the decoy. A rule in your account selects the records about the decoy, shortens them and sends them with a `POST` to the URL of a `web_url` honeytoken. Nobody opens that URL; it is only the address of the report. Nyktus records the request like any other `POST`, see [Report with a POST](/guides/post-reports), and opens an incident for the scenario.
 
 Two things follow from the way the provider sends the record:
 
@@ -35,7 +35,7 @@ None of the decoys holds a real credential or a permission. The guides say what 
 
 ## What the account needs
 
-| | AWS | Azure |
+| Requirement | AWS | Azure |
 |---|---|---|
 | Source of the record | A CloudTrail trail that logs management events, read and write | The diagnostic setting of the resource, sent to a Log Analytics workspace |
 | What selects and sends | An EventBridge rule with an API destination | An alert rule on the workspace and an action group with a webhook |
@@ -82,7 +82,7 @@ The first 4096 bytes of each report, as text, never parsed and never part of an 
 
 - **The trail and the diagnostic setting are the source.** Whoever stops the trail or removes the setting stops the reports without a sign.
 - **Regions.** An AWS call to a region without a rule is not reported. An access key can be used against the global endpoint of the security token service, which AWS records in `us-east-1`, or against any regional endpoint.
-- **Delay and repetition.** The record arrives after minutes, and a provider that does not see success in time sends the request again, so the same access can be reported twice. Azure can also keep a second access from the same address and client from being reported within a short time.
+- **Delay and repetition.** The record arrives after minutes, and a provider that does not see success in time sends the request again, so the same access can be reported twice. Azure may also suppress a second access from the same address and client within a short time.
 - **Your own tools raise the alert.** Anything of yours that reads every secret, role or container, such as an inventory or a backup, reads the decoy too.
 - **Not every access is matched.** The guide of each story lists what its rule matches, for example that listing the secrets of an account names no secret and raises nothing.
 - **Whoever can read the rule can read the URL.** An intruder with read access to EventBridge or to the action group sees it, and can send forged events until the limit of 10 events a minute stops them from adding more.

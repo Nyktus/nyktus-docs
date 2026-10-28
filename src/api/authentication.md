@@ -11,7 +11,7 @@ An integration calls the API with an API key. A person uses the web console, whi
 
 | | Session | API key |
 |---|---|---|
-| For | The web console in a browser. | Scripts, a SIEM, a ticket system, CI/CD. |
+| Used by | The web console in a browser. | Scripts, a SIEM, a ticket system, CI/CD. |
 | Sent as | A cookie that `POST /api/v1/session` sets, or the sign-in through your identity provider. | `Authorization: Bearer <key>` |
 | Acts as | The signed-in user, with the permissions of their role. | The team, with the scopes of the key, whoever created it. |
 
@@ -23,7 +23,7 @@ Some operations admit sessions only. A key that calls one receives `403`. Keys n
 
 ## Creating a key
 
-Only administrators can create API keys.
+Only administrators can create API keys, with a session and after a fresh authentication; see [Confirming sensitive actions](/operate/sign-in#confirming-sensitive-actions).
 
 - **The secret is shown once.** Nyktus keeps only a hash of it. Copy it from the response; a lost key cannot be recovered, only replaced.
 - **Every key expires.** The day is required, from tomorrow to just under three years ahead, counted in UTC. The key stops working at the start of that day. Choose a period that fits your rotation policy. Nyktus does not remind anyone before a key expires.
@@ -34,7 +34,7 @@ Store a key like a password: in the secret store of the integration, never in a 
 
 ## Choosing scopes
 
-A key holds the scopes you select and nothing else, whatever role its creator has. Give each integration the scopes it needs.
+A key holds the scopes you select and nothing else, whatever role its creator has. Give each integration the scopes it needs. [Roles and permissions](/operate/permissions) shows the scopes next to the roles.
 
 | Scope | Allows |
 |---|---|

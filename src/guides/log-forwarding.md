@@ -11,7 +11,7 @@ The page uses [Fluent Bit](https://docs.fluentbit.io) and the story [Decoy accou
 
 ## How the report reaches Nyktus
 
-The forwarder reads the Security log, keeps the events about your decoy accounts and sends them with a `POST` to the URL of a `web_url` honeytoken. Nobody opens that URL; it is only the address of the report. Nyktus records the request like any other `POST`, see [Report with a POST](/guides/honeytokens#report-with-a-post).
+The forwarder reads the Security log, keeps the events about your decoy accounts and sends them with a `POST` to the URL of a `web_url` honeytoken. Nobody opens that URL; it is only the address of the report. Nyktus records the request like any other `POST`, see [Report with a POST](/guides/post-reports).
 
 ## Give every domain controller a honeytoken
 
@@ -53,7 +53,7 @@ A domain controller writes the events only if its audit policy asks for them. In
 | Audit Kerberos Authentication Service | 4768, a ticket granting ticket was requested; 4771, pre-authentication failed |
 | Audit Credential Validation | 4776, the domain controller checked credentials with NTLM |
 
-`auditpol /list /subcategory:*` lists the names of the subcategories. The first subcategory has a very high volume on a domain controller, so the forwarder in the next step must filter.
+`auditpol /list /subcategory:*` lists the names of the subcategories. Audit Kerberos Service Ticket Operations produces a high volume of events on a domain controller, so the forwarder in the next step must filter.
 
 The events 4624 and 4625 are not suitable. They arise on the computer where a sign-in is attempted, so a domain controller records them only for a sign-in at itself.
 

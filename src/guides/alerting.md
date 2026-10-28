@@ -129,7 +129,7 @@ Slack and Teams receive a message for people: the title "Nyktus: incident opened
 - **Slack:** create an incoming webhook for the channel and use its URL, `https://hooks.slack.com/services/…`.
 - **Teams:** in the channel, create a workflow from the template "Post to a channel when a webhook request is received" and use the URL it shows. The message is an adaptive card with a button that opens the incident.
 
-### Mail
+### Email
 
 A channel of the type `email` receives plain text in ASCII with the subject "Nyktus: incident opened (severity)":
 

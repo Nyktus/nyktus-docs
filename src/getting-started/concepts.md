@@ -13,7 +13,7 @@ Nyktus uses a small set of terms with fixed meanings. This page defines them and
 |---|---|
 | Honeytoken | A trigger that raises an event when it is requested or resolved: a URL, an image, a QR code or a DNS name. |
 | Honeypot | A network service that the sensor emulates. It answers like the real service and offers nothing behind the login. |
-| Artifact | Content that makes a scenario believable, sometimes called pocket litter. An artifact never raises an event. |
+| Artifact | A file that makes a scenario believable, such as the document that holds a honeytoken's URL. An artifact never raises an event itself; the honeytokens it names do. An artifact without a honeytoken is called pocket litter. |
 | Scenario | A group of honeytokens, honeypots and artifacts that together tell one believable story. |
 | Deception | A blueprint in the catalog. Applying it creates a scenario with its resources. A deception is not an object of a running installation. |
 | Catalog | The versioned collection of deceptions, with their mappings to techniques and their guides. It ships with Nyktus. |

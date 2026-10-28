@@ -41,7 +41,7 @@ Entries are ordered by the time they were written, not by the time their action 
 
 Entries contain addresses, display names and client addresses of users. Restrict access to the audit log, and to backups of the database, accordingly.
 
-Nyktus records them to prove who did what and to investigate misuse of accounts. In the EU, this is usually covered by the legitimate interest in the security of networks and information (Art. 6(1)(f) and Recital 49 GDPR), limited by the retention below. Record it in your records of processing activities.
+Nyktus records them to prove who did what and to investigate misuse of accounts. In the EU, this is usually covered by the legitimate interest in the security of networks and information (Art. 6(1)(f) and Recital 49 GDPR), limited by the retention below. Record it in your records of processing activities, and confirm the legal basis with your data protection officer.
 
 ## Retention
 

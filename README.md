@@ -3,7 +3,7 @@
 Source of [docs.nyktus.org](https://docs.nyktus.org), the documentation of [Nyktus](https://github.com/Nyktus/nyktus): a self-hosted platform that deploys honeytokens and honeypots to detect intruders, insider threats, data breaches and misconfigured systems.
 
 > [!IMPORTANT]
-> The documentation describes a project in early development and is not complete yet.
+> The documentation describes Nyktus 0.1, the first release.
 
 ## Build the site
 

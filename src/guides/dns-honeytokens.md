@@ -18,8 +18,8 @@ Whoever finds a name sees its zone, so choose it with the same care as the [addr
 - **Inconspicuous.** Use a domain that names neither Nyktus nor a decoy, ideally not your organization either.
 - **Fitting the placement.** With several zones you can pick the one that fits, for example a domain that sounds internal for a configuration file.
 - **Stable.** A placed name stops being recorded once its zone is removed. To move to a new zone, add it, place names under it, and remove the old zone when no name under it is placed any more.
-- **Separate.** No zone may hold the host of the console or of the trigger, and no zone may contain another or its own name servers. Nyktus refuses to start otherwise.
-- **Apart.** Zones that share name servers are linked: whoever looks at one sees the name servers of the other. To keep zones apart, run a DNS role of its own for each, on its own address, with its own `NYKTUS_DNS_ZONES` and `NYKTUS_DNS_NAMESERVERS`. Give the console all zones.
+- **Valid.** No zone may hold the host of the console or of the trigger, and no zone may contain another or its own name servers. Nyktus refuses to start otherwise.
+- **Unlinked.** Zones that share name servers are linked: whoever looks at one sees the name servers of the other. To keep zones apart, run a DNS role of its own for each, on its own address, with its own `NYKTUS_DNS_ZONES` and `NYKTUS_DNS_NAMESERVERS`. Give the console all zones.
 
 Set `NYKTUS_DNS_ZONES` for the DNS role and for the console. The console shows the names and refuses to create a DNS honeytoken while it knows no zone (`422`, `dns_not_configured`).
 
