@@ -1,14 +1,14 @@
 {
   "repository": "Nyktus/nyktus",
-  "ref": "5c141f47de79cca0a8873d7b223250f44ec476a0",
+  "ref": "a287b7a5b40ce66594772c36667e5658e9e9095e",
   "files": {
     "data/openapi.yaml": {
       "source": "api/openapi.yaml",
-      "sha256": "36a8fceee3e925465d6187fa305c904a16095c5e2c46a62a6e5f5d221bcc8fdd"
+      "sha256": "bb62cf889b25796706762f822adc096d21a35e1ce9b4364838e08d4e6a8e1c35"
     },
     "data/deception-catalog.json": {
       "source": "docs/public/deception-catalog.json",
-      "sha256": "a7be93aacc9cf7eaee3e792deedae46ab8676db80470e5bab87b28e85b5c37c7"
+      "sha256": "39a31d04c65dbe64c0de1f32f990c567472402afefca769a9931ff0902c1a19a"
     }
   }
 }
