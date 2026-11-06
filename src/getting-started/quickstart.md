@@ -224,7 +224,7 @@ curl --fail-with-body http://127.0.0.1:8080/api/v1/honeypots \
   --cookie cookies.txt
 ```
 
-The answer holds the `id`, the `secret` and the `sensor_config`, the entry for the configuration file of the sensor. Nyktus shows the secret only in this answer. Write the configuration file with the `id` and the `secret` of the answer. The file listens on port 2323 of your machine, because port 23 needs a privilege, and reports to the trigger over `http`, which only the development mode allows:
+The answer holds the `id`, the `secret` and the `sensor_config`, the entry for the configuration file of the sensor. Nyktus can show the secret again later to those who may change honeypots, see [Read the secret again](/guides/honeypots#read-the-secret-again). Write the configuration file with the `id` and the `secret` of the answer. The file listens on port 2323 of your machine, because port 23 needs a privilege, and reports to the trigger over `http`, which only the development mode allows:
 
 ```sh
 umask 077
@@ -351,5 +351,5 @@ rm nyktus.env cookies.txt sensor.yaml
 - [Concepts](/getting-started/concepts) and [Architecture](/getting-started/architecture) explain what you just ran, and why a real installation splits the roles.
 - [Honeytokens](/guides/honeytokens) and [honeypots](/guides/honeypots) cover the types, the placement and what an event records.
 - [Alerting](/guides/alerting) sets up Slack, Teams, webhook and mail channels.
-- The [deception catalog](/guides/catalog) creates a whole scenario with its files and a guide.
+- The [deception catalog](/guides/catalog) offers guides with example files for whole stories, and [scenarios](/guides/scenarios) group the decoys of one story.
 - [Deploy](/operate/deploy) turns what you ran into an installation that holds real data.

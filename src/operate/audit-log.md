@@ -18,15 +18,15 @@ Nyktus records security-relevant actions in an audit log in its database. The co
 ### What is not in the log
 
 - **Requests without valid credentials** are not recorded, so that anonymous clients cannot fill the audit log. The access log records them. A failed sign-in for an unknown address is recorded without the address.
-- **Repeated reads and denials** are recorded at most once per user or API key, action and minute, so that a signed-in user or a key cannot fill the log by repeating them. This covers reads of the audit log and of events, which contain personal data, downloads of artifacts, and requests denied for a missing permission. The access log records every one.
+- **Repeated reads and denials** are recorded at most once per user or API key, action and minute, so that a signed-in user or a key cannot fill the log by repeating them. This covers reads of the audit log and of events, which contain personal data, and requests denied for a missing permission. The access log records every one.
 - **Retention deletions.** The worker's deletion of old entries and events is not an entry. The log of the worker records how many rows each run deleted.
-- **Values of changes, secrets and reads of incidents.** Updates name fields, not values. A new secret of a honeypot is recorded as `honeypot.update` with the field `secret`, never its value. Incidents hold no personal data, so their reads are not recorded.
+- **Values of changes, secrets and reads of incidents.** Updates name fields, not values. A new secret of a honeypot is recorded as `honeypot.update` with the field `secret`, and every read of a secret as `honeypot.secret_read`, never with the value. Incidents hold no personal data, so their reads are not recorded.
 
 ### Some entries that need explanation
 
 - A sign-in through the identity provider is recorded once the provider has confirmed the user. The first one creates the account, recorded as `user.create` with the new account as actor. A change of role or name that the provider reports is recorded as `user.update`, and so is the deactivation of a user who is in none of the configured groups. A rejected sign-in of an account is a failure of `session.create` with the account. The log of the console names the reason, the issuer and the subject.
 - A user of the provider who signs in there again to confirm a sensitive action is recorded as `session.reauthenticate`, successful or not.
-- Deleting a scenario records `scenario.delete` and an entry for every honeytoken, honeypot and artifact it removes or deletes, in the same transaction. Applying a deception records the creation of the scenario, every honeytoken and every artifact, also in one transaction.
+- Deleting a scenario records `scenario.delete` and an entry for every honeytoken and honeypot it removes or deletes, in the same transaction. Applying a deception records `scenario.create` and, with `create_resources`, `honeytoken.create` and `honeypot.create` with the field `scenario_id` for every resource, also in one transaction. Adding or removing a deception is `scenario.update` with the field `deceptions`.
 - Creating and changing an alert channel is confirmed with the password. A failed confirmation is a failure of `alert_channel.create` or `alert_channel.update`. A test is `alert_channel.test`, and the retry of a dead delivery `alert_delivery.retry`.
 
 ## Read the audit log

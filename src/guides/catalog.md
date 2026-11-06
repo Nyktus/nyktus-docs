@@ -1,82 +1,110 @@
 ---
 title: Deception catalog
-description: Choose a deception, apply it to create a scenario, and know what the files it renders can and cannot give away.
+description: Choose a deception, apply it to create a scenario, and know what its example files can and cannot give away.
 ---
 
 # Deception catalog
 
-The catalog holds the deceptions that ship with Nyktus: blueprints of scenarios, such as an SSH configuration whose jump host is a DNS honeytoken, or a Windows shortcut to the URL of a honeytoken. A deception describes the honeytokens it creates, the values it asks you for so that its files fit your environment, and the files it renders, together with a guide that says where to place them and how to test them. This page helps you choose one, apply it, and understand what its files give away.
+The catalog holds the deceptions that ship with Nyktus. A deception is a guide: it tells a story, such as remote access files whose server names are DNS honeytokens, says which honeytokens and honeypots the story needs, and offers example files to adapt and place. This page helps you choose one, apply it, and understand what its files give away.
 
 The catalog is part of the server binary and the same in every installation. Nyktus checks it when the console starts, and a server whose catalog does not validate does not start. Nothing is loaded at runtime, and the catalog contains no executable code. New deceptions come with new releases. To add your own, put them into `catalog/` of the source and build Nyktus yourself, as `catalog/README.md` of the repository describes.
 
-## Choose a deception
+## What a deception holds
 
-The [catalog reference](/guides/catalog-reference) lists every deception with the honeytokens it creates, the values it asks for and the files it renders. The console shows the same and applies a deception with a form.
+The [catalog reference](/guides/catalog-reference) lists every deception. The console shows the same and applies a deception with a form.
 
-[`GET /api/v1/catalog/deceptions`](/api/reference/catalog#listCatalogDeceptions) returns the whole list, ordered by identifier and not paged. [`GET /api/v1/catalog/deceptions/<id>`](/api/reference/catalog#getCatalogDeception) returns one. Texts are English; add `?lang=de` for German.
+[`GET /api/v1/catalog/deceptions`](/api/reference/catalog#listCatalogDeceptions) returns the whole list, ordered by identifier and not paged, with the summary of each deception. [`GET /api/v1/catalog/deceptions/<id>`](/api/reference/catalog#getCatalogDeception) returns one in full. Texts are English; add `?lang=de` for German.
 
 | Field | Meaning |
 |---|---|
 | `category` | What the deception pretends to be: `identity`, `network`, `data`, `endpoint`, `application` or `cloud`. |
 | `techniques` | The MITRE ATT&CK techniques that a trigger of the deception suggests. |
-| `engage_activities` | The activities of MITRE Engage that the deception carries out, such as `EAC0005` (Lures) and `EAC0011` (Pocket Litter). |
-| `honeytokens` | The honeytokens that applying it creates, with the techniques and severity each receives. A deception raises the severity above the default of the type for a honeytoken that nobody but an intruder has a reason to use, such as the host in a `.netrc`. |
-| `persona` | The values you enter so that the files fit your environment. `host` is a host name, `name` an account name, and `text` free text that appears only in files a person reads. `example` only illustrates a value. |
-| `secrets` | Random values, such as passwords, that Nyktus generates when you apply the deception. |
-| `artifacts` | The artifacts it recommends, each with its file name and format. Applying the deception renders them, unless you choose a selection. A deception without artifacts consists of its guide, for example because you write the document yourself. |
+| `engage_activities` | The activities of MITRE Engage that the story carries out, such as `EAC0005` (Lures) and `EAC0011` (Pocket Litter). |
+| `guide` | The instruction in Markdown, with the sections `Story`, `Setup`, `Testing`, `Limits` and, where something stays behind in a system, `Removing`. |
+| `honeytokens` | The slots for honeytokens: for each a `label`, the `type` it needs, and the techniques and severity it receives when you create it by applying the deception. A deception raises the severity above the default of the type for a honeytoken that nobody but an intruder has a reason to use. |
+| `honeypots` | The slots for honeypots: for each a `label` and the `service` it needs. |
+| `files` | The example files, each with its `name`, its `format` and its `size` in bytes. |
 
-## Artifacts of the catalog
+A slot only names what the story needs. It binds nothing: Nyktus does not remember which honeytoken you created for which slot, so the scenario lists its honeytokens and honeypots once, not per deception.
 
-An artifact is a template of a file that you place to make a scenario believable, such as an SSH configuration. A deception recommends artifacts, and each artifact also exists on its own, so that you can add one to a scenario later, see [Add a deception or an artifact](/guides/scenarios#add-a-deception-or-an-artifact).
+## Example files
 
-[`GET /api/v1/catalog/artifacts`](/api/reference/catalog#listCatalogArtifacts) returns the whole list, ordered by identifier and not paged. [`GET /api/v1/catalog/artifacts/<id>`](/api/reference/catalog#getCatalogArtifact) returns one with the members below. Add `?lang=de` for German texts.
+The files are static text that the catalog holds. Nyktus fills in nothing, generates nothing and stores nothing when you use a deception. [`GET /api/v1/catalog/deceptions/<id>/files/<name>`](/api/reference/catalog#downloadCatalogDeceptionFile) returns a file as an attachment with its name:
 
-| Field | Meaning |
-|---|---|
-| `file_name`, `format` | The name under which the file is downloaded, and its format, see [Artifacts](/guides/artifacts#what-an-artifact-holds). |
-| `slots` | The places for the trigger of a honeytoken, each with the types it accepts (`web_url`, `web_image` or `dns`) and whether it is `optional`. A slot bound to a honeytoken makes the file a lure, because whoever uses the file triggers the honeytoken. A file without a bound slot is pocket litter: it gives the story a believable surrounding and raises no event itself. |
-| `persona` | The values it asks for, as for a deception. |
-| `secrets` | The random values, such as passwords, that it generates. Every artifact generates its own, so two files of one story do not share a password. |
+```sh
+curl --fail-with-body --remote-header-name --remote-name \
+  --header "Authorization: Bearer $NYKTUS_API_KEY" \
+  "<console-url>/api/v1/catalog/deceptions/remote-access/files/wg0.conf"
+```
+
+The answer carries the headers `Content-Disposition: attachment; filename=wg0.conf`, `Content-Type: application/octet-stream` (files that a tool reads come as `application/octet-stream`), `Content-Security-Policy: default-src 'none'; sandbox`, `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`. The file is what the catalog holds, with the placeholder in it.
+
+A file is not an inventory and not private. Three things follow, and you do them by hand:
+
+- **Replace the placeholder.** A honeytoken stands as `Honeytoken-Domain` for a DNS honeytoken and `Honeytoken-URL` for a URL or an image. If a deception asks for several honeytokens of one kind, the placeholder carries the name of its slot, such as `Honeytoken-Domain-Server`, and the `Setup` section of the guide says which placeholder belongs to which honeytoken. The value to enter stands on the page of the scenario.
+- **Change names and passwords.** The names and passwords in a file are the same in every installation, and the catalog is public. Anyone can look a password up. Adapt them to your environment before you place the file, and do not reuse a real one.
+- **Adapt the file to its place.** Dates, owner and location are yours, see [Placement](/security/stealth#files-and-placement).
+
+The web console never opens a file. It saves it for you, because a file of the format `html` would otherwise run in the origin of the console. The headers above keep a browser from rendering it for the same reason. Downloads are not recorded in the audit log, because the catalog holds no inventory.
+
+A script that creates accounts, such as those of [the decoy accounts](/guides/catalog-reference#ad-decoy-accounts), is part of the guide and not a file. It generates its passwords itself when it runs.
 
 ## Apply a deception
 
-Applying a deception creates a scenario with its honeytokens and its artifacts, and renders its guide. Everything is created together or not at all. This request applies `ssh-config`:
+Applying a deception creates a scenario that holds its identifier. This request applies `remote-access` and creates the scenario only:
 
 ```sh
 curl --fail-with-body --request POST \
-  "<console-url>/api/v1/catalog/deceptions/ssh-config/apply" \
+  "<console-url>/api/v1/catalog/deceptions/remote-access/apply" \
   --header "Authorization: Bearer $NYKTUS_API_KEY" \
   --header "Content-Type: application/json" \
-  --data '{"name": "Admin workstation ws07", "language": "en", "persona": {"Domain": "corp.example.com", "Account": "j.doe"}}'
+  --data '{"name": "Admin workstation ws07", "language": "en"}'
 ```
 
-The key needs `scenarios:write`, which covers the honeytokens and artifacts that applying creates. A scope to write brings the scope to read the same resource, and `scenarios:read` brings `honeytokens:read`, because the response names the URLs of honeytokens. The response, with status `201`, holds the `scenario`, its `honeytokens` and its `artifacts` without their content.
+The key needs `scenarios:write`. The response has the status `201`. It holds the `scenario`, and the lists `honeytokens` and `honeypots` of what the request created, which are empty here. The identifiers and times differ in your installation:
+
+```json
+{
+  "scenario": {
+    "id": "bdcb387d-942a-4140-a879-4feb55f52d86",
+    "name": "Admin workstation ws07",
+    "notes": "",
+    "engage_activities": ["EAC0005", "EAC0011", "EAC0022"],
+    "deceptions": [
+      {"deception_id": "remote-access", "created_at": "2026-11-06T17:38:40.430093Z"}
+    ],
+    "created_at": "2026-11-06T17:38:40.427945Z",
+    "updated_at": "2026-11-06T17:38:40.430525Z"
+  },
+  "honeytokens": [],
+  "honeypots": []
+}
+```
 
 - `name` and `notes` name the new scenario, with the rules of a [scenario](/guides/scenarios).
-- `language` is `en` by default, or `de`. It sets the language of the guide and of the names of the honeytokens.
-- `artifacts` names the artifacts to create, each one that the deception recommends. Without it, all of them are created; an empty list creates none.
-- `persona` must hold a value for every value of the deception, by its key, and nothing else. There are no defaults, because a value that every installation shares would identify the files as decoys. Each value must match its kind: a `host` is a host name in lowercase letters, digits, hyphens and dots, a `name` is an account name of up to 64 letters, digits, dots, hyphens and underscores, and a `text` is one line of up to 200 characters.
+- `language` is `en` by default, or `de`. It sets the language of the names of the resources that the request creates. The guide is shown in the language you ask for when you read it.
+- `create_resources` is `false` by default. With `true`, Nyktus also creates the honeytokens and honeypots of the slots, named after their labels, and adds them to the scenario. The key then needs `honeytokens:write` and `honeypots:write` as well, whatever the deception asks for. Without them the request gets `403` before anything is loaded. A honeypot comes without its secret, which [`GET /api/v1/honeypots/<id>/secret`](/api/reference/honeypots#getHoneypotSecret) returns.
 
-What you get next:
+Everything is created together or not at all. The scenario gains the Engage activities of the deception.
 
-- The honeytokens belong to the scenario, are enabled, and have the techniques and the severity of the deception.
-- The artifacts are rendered with the URLs of the honeytokens under the address of your trigger, and the names of DNS honeytokens under the first zone of `NYKTUS_DNS_ZONES`. Download each with [`GET /api/v1/artifacts/<id>/content`](/api/reference/artifacts#downloadArtifact), and record where you placed it. See [Artifacts](/guides/artifacts).
-- [`GET /api/v1/scenarios/<id>/guide`](/api/reference/scenarios#getScenarioGuide) returns the guide of the deception for this scenario, see [The guide](/guides/scenarios#the-guide).
+What you do next is in the guide: create the honeytokens, replace the placeholders in the files, place them and record where. [Scenarios](/guides/scenarios#work-through-a-deception) describes the steps.
+
+The scenario keeps only the identifier of the deception. Its guide, slots and files are read from the catalog when they are shown. A later release with a changed catalog therefore changes what every scenario that holds the deception shows. A deception that a release removed stays in the scenario as an identifier, and the console says that the catalog no longer knows it.
 
 ### What can go wrong
 
 | Status and code | Reason |
 |---|---|
-| `400` `invalid_request` | A field is invalid. The message names it, for a persona value with its key, for example `persona Account: is required`. |
+| `400` `invalid_request` | A field is invalid. The message names it. |
+| `403` `forbidden` | `create_resources` is `true` and the key lacks `honeytokens:write` or `honeypots:write`. |
 | `404` `not_found` | The catalog has no such deception. |
-| `422` `dns_not_configured` | The deception has a DNS honeytoken, but the console knows no zone of the DNS role. Set `NYKTUS_DNS_ZONES` for the console. |
-| `422` `artifact_reveals_decoy` | An artifact would contain a word that reveals what it is, such as `canary` or the identifier of the deception. Nyktus checks every artifact it renders, because values it does not control reach them: the persona, the address of the trigger and the zone of the DNS role. Choose other values. A zone such as `canary.example.com` makes every DNS honeytoken suspicious. |
+| `422` `dns_not_configured` | `create_resources` is `true`, the deception has a DNS honeytoken, and the console knows no zone of the DNS role. Set `NYKTUS_DNS_ZONES` for the console. |
 
 ## What the files contain
 
-Files rendered from the catalog never name Nyktus or what they are. The catalog rejects a template whose text contains words such as the product name, "honeytoken" or "decoy". Values that a tool interprets, such as the host names in an SSH configuration, can only be host names, account names, URLs of honeytokens or random values, so that no value can add a directive to the file. A file only causes a DNS lookup or an HTTP request. It never runs code on the system that opens it.
+The catalog never names Nyktus and carries no identifier of it. It rejects an example file whose name or text contains the product name, "honeytoken", "honeypot", "decoy", "deception", "canary", a short form of a Creative Commons license or the identifier of its deception, apart from the placeholders. Guides are read by you and may say what the deception is. A file only causes a DNS lookup or an HTTP request when a program uses it. It never runs code on the system that opens it.
 
-The catalog is public, so anyone can read its templates. Enter persona values that fit your environment, and adapt the files to the place where you put them.
+What the catalog cannot hide is that it is public. Anyone can read the example files, so an intruder who knows the project can recognize a file that you placed unchanged. Adapt the names and the passwords, and place the file where it fits.
 
 ## The catalog as a file
 
@@ -84,12 +112,11 @@ This documentation also serves the catalog as a file, [`/deception-catalog.json`
 
 | Member | Content |
 |---|---|
-| `schema_version` | `2`, the version of the format of the file. |
+| `schema_version` | `3`, the version of the format of the file. |
 | `license`, `notice` | The license of the deceptions, CC BY-SA 4.0, and the notices of the deceptions and of the names from MITRE ATT&CK and MITRE Engage. Keep them when you pass the file on. |
 | `attack_version`, `engage_version` | The versions of ATT&CK and Engage that the identifiers come from. |
 | `techniques`, `engage_activities` | The name of every technique and activity that the deceptions use, by identifier. |
-| `deceptions` | By language, `en` and `de`, every deception as the API returns it, ordered by identifier. Its `artifacts` name the artifacts it recommends by `key`. |
-| `artifacts` | By language, `en` and `de`, every artifact as the API returns it, ordered by identifier. |
+| `deceptions` | By language, `en` and `de`, every deception as `GET /api/v1/catalog/deceptions/<id>` returns it, ordered by identifier. Each file also holds its `content`. |
 
 ## Who can read the catalog
 

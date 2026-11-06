@@ -7,7 +7,7 @@ description: What an intruder can observe of a Nyktus installation, and what you
 
 A decoy works best when an intruder does not recognize it. This page lists what an intruder can observe of each part of Nyktus and what you can do about it, so that you can place decoys that give less away.
 
-Nyktus itself marks nothing. Artifacts carry no identifier, no answer of the trigger carries a header that names the product, and the trigger and the DNS role answer every request alike. What an intruder can still see is what you chose, such as a host name, and what the network shows, such as a connection.
+Nyktus itself marks nothing. The example files of the catalog carry no identifier, no answer of the trigger carries a header that names the product, and the trigger and the DNS role answer every request alike. What an intruder can still see is what you chose, such as a host name, and what the network shows, such as a connection.
 
 ## Who this matters for
 
@@ -63,11 +63,15 @@ Red teams, insiders and targeted intruders do this. Weigh the effort against who
 
 **On the network.** The sensor sends each session report to your trigger, and a heartbeat for each honeypot when it starts and every five minutes. A host that sees the egress of the sensor host sees regular HTTPS requests to the trigger host. Use the same neutral address as for the honeytokens. The sensor sends no request through a proxy from its environment, because the secret would travel to it; if you want a relay, put it in front of the trigger and name it in `trigger_url`.
 
-## Artifacts and placement
+## Files and placement
 
-Artifacts carry no marker that identifies Nyktus. Nyktus also refuses to render an artifact that would contain a word that reveals a decoy, such as `canary` or the identifier of the deception. It checks the values you supply, the persona, the address of the trigger and the DNS zone, so a zone such as `canary.example.com` fails at once.
+The example files of the catalog carry no marker that identifies Nyktus. The catalog refuses a file whose name or text contains a word that reveals a decoy, such as the product name or `canary`. Nyktus renders and changes nothing: every installation offers the same files.
 
-What Nyktus cannot control is how you place the file. The name, the dates, the owner and the location of a file tell an intruder whether it belongs where it lies. A backup that carries the date of the day you placed it, in a folder where nothing else is recent, looks placed. The guide of each scenario says where an artifact fits; set its dates and owner to match its neighbors.
+That makes the catalog itself the weakness. It is public, and so are the file names, the account names and the passwords in the files. Whoever knows the project can search for them.
+
+- Change the names and passwords in a file before you place it. Use values that fit your environment, in the form that real files of the kind hold.
+- Replace the placeholder for a honeytoken, such as `Honeytoken-Domain`, by the host name or the URL of the honeytoken. A file that still holds one is not placed yet, and the placeholder is a recognizable word.
+- Set the name, the dates, the owner and the location of the file so that they match its neighbors. A backup that carries the date of the day you placed it, in a folder where nothing else is recent, looks placed. The guide of each deception says where its files fit.
 
 ## What stays visible
 
@@ -90,4 +94,4 @@ No measure makes a decoy invisible to an intruder who controls their own DNS and
 | queries the zone | name servers, the same answer for every name | name the name servers neutrally; use a DNS role of its own for zones that must not be linked |
 | scans a honeypot | a default banner, library algorithms, a clear-text password request | change the banner; give each SSH honeypot its own host key |
 | watches the egress of the sensor host | HTTPS requests to the trigger host every five minutes | use the neutral trigger address |
-| finds an artifact | its name, dates, owner and place | place it as the guide says; match its neighbors |
+| finds an example file | its name, dates, owner and place, and the names and passwords that every installation shares | change names and passwords; place it as the guide says; match its neighbors |

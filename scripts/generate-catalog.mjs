@@ -12,7 +12,7 @@ import { escapeText } from './openapi.mjs'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const source = join(root, 'data/deception-catalog.json')
 const catalog = JSON.parse(readFileSync(source, 'utf8'))
-if (catalog.schema_version !== 2) throw new Error(`generate-catalog: unknown schema version ${catalog.schema_version}`)
+if (catalog.schema_version !== 3) throw new Error(`generate-catalog: unknown schema version ${catalog.schema_version}`)
 
 const code = (value) => '`' + value + '`'
 const cell = (text) => escapeText(String(text ?? '')).replace(/\s+/g, ' ').replace(/\|/g, '\\|')
@@ -23,13 +23,11 @@ const techniques = (ids) => (ids.length ? ids.map((id) => `${techniqueLink(id)} 
 const activities = (ids) => ids.map((id) => `${activityLink(id)} ${cell(catalog.engage_activities[id]?.name ?? '')}`.trim()).join('<br>')
 
 const deceptions = catalog.deceptions.en
-const artifacts = catalog.artifacts.en
-const artifactById = new Map(artifacts.map((a) => [a.id, a]))
 const out = []
 out.push(
   '---',
   'title: Catalog reference',
-  'description: Every deception and artifact of the Nyktus catalog, with the honeytokens it creates, the values it asks for and the files it renders.',
+  'description: Every deception of the Nyktus catalog, with the honeytokens and honeypots its guide asks for and the example files it offers.',
   'outline: [2, 2]',
   'editLink: false',
   'lastUpdated: false',
@@ -37,7 +35,7 @@ out.push(
   '',
   '# Catalog reference',
   '',
-  `The deceptions and artifacts that ship with Nyktus, in the language \`en\`. This page is generated from the published catalog file, version ${code(catalog.schema_version)} of its format, which uses MITRE ATT&CK ${catalog.attack_version} and MITRE Engage ${catalog.engage_version}. [How to apply a deception](/guides/catalog#apply-a-deception) is described in the guide. The file itself is at [/deception-catalog.json](/deception-catalog.json), with the German texts, for readers that do not reach the API of an installation.`,
+  `The deceptions that ship with Nyktus, in the language \`en\`. This page is generated from the published catalog file, version ${code(catalog.schema_version)} of its format, which uses MITRE ATT&CK ${catalog.attack_version} and MITRE Engage ${catalog.engage_version}. [How to apply a deception](/guides/catalog#apply-a-deception) is described in the guide. The file itself is at [/deception-catalog.json](/deception-catalog.json), with the German texts, for readers that do not reach the API of an installation.`,
   '',
   '| Deception | Category | Summary |',
   '|---|---|---|',
@@ -50,31 +48,22 @@ for (const d of deceptions) {
   out.push(`**Techniques:** ${techniques(d.techniques).replaceAll('<br>', ', ') || 'none'}  `)
   out.push(`**Engage activities:** ${activities(d.engage_activities).replaceAll('<br>', ', ') || 'none'}`, '')
   if (d.honeytokens.length) {
-    out.push('**Honeytokens it creates**', '', '| Label | Type | Severity | Techniques |', '|---|---|---|---|')
+    out.push('**Honeytokens it asks for**', '', '| Label | Type | Severity | Techniques |', '|---|---|---|---|')
     for (const h of d.honeytokens) out.push(`| ${cell(h.label)} | ${code(h.type)} | ${h.severity} | ${techniques(h.techniques)} |`)
     out.push('')
   }
-  if (d.persona.length) {
-    out.push('**Values it asks for**', '', '| Key | Kind | Label | Example |', '|---|---|---|---|')
-    for (const p of d.persona) out.push(`| ${code(p.key)} | ${p.kind} | ${cell(p.label)} | ${code(cell(p.example))} |`)
+  if (d.honeypots.length) {
+    out.push('**Honeypots it asks for**', '', '| Label | Service |', '|---|---|')
+    for (const h of d.honeypots) out.push(`| ${cell(h.label)} | ${code(h.service)} |`)
     out.push('')
   }
-  if (d.secrets.length) out.push(`**Secrets it generates:** ${d.secrets.map((s) => `${code(s.key)} (${s.length} characters)`).join(', ')}`, '')
-  if (d.artifacts.length) {
-    out.push('**Files it renders**', '', '| Artifact | File | Format |', '|---|---|---|')
-    for (const a of d.artifacts) out.push(`| [${cell(artifactById.get(a.key)?.title ?? a.key)}](#artifact-${a.key}) | ${code(a.file_name)} | ${code(a.format)} |`)
+  if (d.files.length) {
+    out.push('**Example files**', '', '| File | Format | Size |', '|---|---|---|')
+    for (const f of d.files) out.push(`| ${code(f.name)} | ${code(f.format)} | ${f.size} bytes |`)
     out.push('')
   } else {
-    out.push('It renders no file. Its guide tells you what to create.', '')
+    out.push('It offers no example file. Its guide tells you what to create.', '')
   }
-}
-
-out.push('## Artifacts', '', 'An artifact is a template of a file that you place to make a scenario believable. A deception recommends artifacts, and each artifact also exists on its own. A honeytoken slot that is bound to a honeytoken makes the file a lure; a file without a bound slot is pocket litter.', '')
-for (const a of artifacts) {
-  out.push(`### ${escapeText(a.title)} {#artifact-${a.id}}`, '', `${code(a.id)} · ${a.category} · ${code(a.file_name)} (${code(a.format)})`, '', escapeText(a.summary), '')
-  if (a.slots.length) out.push(`**Honeytoken slots:** ${a.slots.map((x) => `${code(x.key)} (${x.accepts.join(' or ')}${x.optional ? ', optional' : ''})`).join(', ')}`, '')
-  if (a.persona.length) out.push(`**Values it asks for:** ${a.persona.map((p) => `${code(p.key)} (${p.kind})`).join(', ')}`, '')
-  if (a.secrets.length) out.push(`**Secrets it generates:** ${a.secrets.map((x) => `${code(x.key)} (${x.length} characters)`).join(', ')}`, '')
 }
 
 out.push('## Techniques and activities', '', '| Identifier | Name |', '|---|---|')
@@ -86,4 +75,4 @@ mkdirSync(join(root, 'src/guides'), { recursive: true })
 writeFileSync(join(root, 'src/guides/catalog-reference.md'), out.join('\n') + '\n')
 mkdirSync(join(root, 'src/public'), { recursive: true })
 copyFileSync(source, join(root, 'src/public/deception-catalog.json'))
-console.log(`generate-catalog: ${deceptions.length} deceptions, ${artifacts.length} artifacts`)
+console.log(`generate-catalog: ${deceptions.length} deceptions`)

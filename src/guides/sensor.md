@@ -24,7 +24,7 @@ Update the server before the sensors. The server refuses a report of a version i
 
 ## Set it up
 
-1. [Create the honeypot](/guides/honeypots#create-one). The response holds the `secret` and the `sensor_config` entry, shown once.
+1. [Create the honeypot](/guides/honeypots#create-one). The response holds the `secret` and the `sensor_config` entry. You can read both again later, see [Read the secret again](/guides/honeypots#read-the-secret-again).
 2. Write the configuration file with the address of your trigger and the entry:
 
    ```yaml

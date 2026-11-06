@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: The Nyktus Authors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { defineConfig } from 'vitepress'
 import { plateTheme } from './plate-theme'
 import { loadSpec, tagPages } from '../scripts/openapi.mjs'
@@ -27,7 +29,6 @@ const guides = [
     text: 'Stories',
     items: [
       { text: 'Scenarios', link: '/guides/scenarios' },
-      { text: 'Artifacts', link: '/guides/artifacts' },
       { text: 'Deception catalog', link: '/guides/catalog' },
       { text: 'Catalog reference', link: '/guides/catalog-reference' },
     ],
@@ -45,6 +46,13 @@ const guides = [
   },
 ]
 
+// Pages that were removed or renamed. Published URLs are permanent, so each old path gets a small page
+// that sends the reader on. A static host needs no server rules for it. Add a line here in the same
+// change that moves a page.
+const redirects: Record<string, string> = {
+  '/guides/artifacts': '/guides/catalog#example-files',
+}
+
 // English is the root locale. To add a language:
 //   1. Add its entry to `locales` below, with its own `link`, `themeConfig.nav` and `sidebar`.
 //   2. Put its pages in a folder of the same name under `src/`, with the same paths as the
@@ -58,6 +66,31 @@ export default defineConfig({
   srcDir: 'src',
   cleanUrls: true,
   lastUpdated: true,
+
+  buildEnd(siteConfig) {
+    for (const [from, to] of Object.entries(redirects)) {
+      const page = join(siteConfig.outDir, `${from}.html`)
+      mkdirSync(dirname(page), { recursive: true })
+      const canonical = `https://docs.nyktus.org${to.split('#')[0]}`
+      writeFileSync(
+        page,
+        `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>This page has moved</title>
+<meta name="robots" content="noindex">
+<link rel="canonical" href="${canonical}">
+<meta http-equiv="refresh" content="0; url=${to}">
+</head>
+<body>
+<p>This page has moved to <a href="${to}">${canonical}</a>.</p>
+</body>
+</html>
+`,
+      )
+    }
+  },
 
   // Lets search engines find every page of docs.nyktus.org.
   sitemap: { hostname: 'https://docs.nyktus.org' },

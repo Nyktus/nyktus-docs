@@ -16,7 +16,6 @@ A permission has the form `resource:action`. `read` reads, and `write` creates, 
 | Honeytokens | read, write | read, write | read | `honeytokens:read`, `honeytokens:write` |
 | Honeypots | read, write | read, write | read | `honeypots:read`, `honeypots:write` |
 | Scenarios | read, write | read, write | read | `scenarios:read`, `scenarios:write` |
-| Artifacts | read, write | read, write | read | `artifacts:read`, `artifacts:write` |
 | Incidents | read, write | read, write | read | `incidents:read`, `incidents:write` |
 | Events | read | read | read | `events:read` |
 | Deception catalog | read | read | read | `catalog:read` |
@@ -29,22 +28,20 @@ A permission has the form `resource:action`. `read` reads, and `write` creates, 
 Notes on the table:
 
 - **`write` on incidents** is triage: acknowledge, close, add notes, override the severity and the techniques. A `viewer` cannot triage.
-- **Applying a deception** and **adding a deception or an artifact to a scenario** need `scenarios:write`, which covers the honeytokens and artifacts they create. **Putting a honeytoken or a honeypot into a scenario** needs `honeytokens:write` or `honeypots:write` instead, because the decoy changes and the scenario does not. Deleting a scenario together with its honeypots needs `scenarios:write` and `honeypots:write`.
+- **Applying a deception,** **adding one to a scenario** and **removing one** need `scenarios:write`. With `create_resources` they also need `honeytokens:write` and `honeypots:write`, whatever the deception asks for. **Creating a honeytoken or a honeypot in a scenario** and **putting one into a scenario** need `honeytokens:write` or `honeypots:write` instead, because the decoy changes and the scenario does not. Deleting a scenario together with its honeypots needs `scenarios:write` and `honeypots:write`.
+- **Reading the secret of a honeypot** needs `honeypots:write`, not `honeypots:read`, because whoever holds the secret can report sessions in the name of the sensor. A `viewer` cannot read it. Every read is audited.
 - **Keys never manage** alert channels, accounts or API keys, not even to read them. A leaked key with one of these could redirect the alerts, take over accounts or issue itself a successor.
 - **Reading deliveries of an alert** (`GET /api/v1/incidents/<id>/deliveries`) needs `incidents:read`. Managing channels and retrying a delivery need a session of an administrator.
 
 ## Scopes that depend on others
 
-A scope to change a resource requires the scope to read it, because a key that changes a resource receives it in the responses. Some read scopes require another one, because the answer names the URLs and host names of honeytokens:
+A scope to change a resource requires the scope to read it, because a key that changes a resource receives it in the responses. These pairs are the only dependencies:
 
 | Scope | Requires |
 |---|---|
 | `honeytokens:write` | `honeytokens:read` |
 | `honeypots:write` | `honeypots:read` |
-| `scenarios:read` | `honeytokens:read` |
 | `scenarios:write` | `scenarios:read` |
-| `artifacts:read` | `honeytokens:read` |
-| `artifacts:write` | `artifacts:read` |
 | `incidents:write` | `incidents:read` |
 
 Nyktus rejects a key whose scopes break one of these rules. See [Choosing scopes](/api/authentication#choosing-scopes) for what to give an integration.
