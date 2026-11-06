@@ -12,8 +12,8 @@ Administrators create and manage the accounts of the console. There is no public
 | Role | Purpose |
 |---|---|
 | `admin` | Manages the installation: accounts, API keys, alert channels and settings. Reads the audit log and does everything a `user` does. |
-| `user` | Configures honeypots, honeytokens, scenarios and artifacts, and works with incidents. |
-| `viewer` | Reads decoys, scenarios, artifacts, incidents, events and the deception catalog. Does not triage incidents and does not read the audit log. |
+| `user` | Configures honeypots, honeytokens and scenarios, and works with incidents. |
+| `viewer` | Reads decoys, scenarios, incidents, events and the deception catalog. Does not triage incidents and does not read the audit log. |
 
 [Roles and permissions](/operate/permissions) lists what each role may do. Decoys, scenarios and API keys belong to the team, not to the account that created them. You cannot demote, deactivate or delete your own account, nor change the role of an account of the identity provider. A new role or status ends every session of the account.
 

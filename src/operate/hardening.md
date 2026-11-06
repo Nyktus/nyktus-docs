@@ -23,7 +23,7 @@ Nyktus is built so that a wrong setting stops the server rather than weakening i
 
 ## Secrets
 
-- Keep the encryption keys in your secret store. A lost key means lost secrets of second factors and alert channels. See [Encryption keys](/operate/configuration#encryption-keys).
+- Keep the encryption keys in your secret store. A lost key means lost secrets of second factors, alert channels and honeypots. See [Encryption keys](/operate/configuration#encryption-keys).
 - Make environment files and secret files readable by their administrator or the service account only. Do the same for the configuration and the secret files of every sensor. See [Secrets in files](/guides/sensor#secrets-in-files).
 - Treat the setup URL like a password until you have used it. It is printed to standard output, which a log collection may keep. See [First start](/operate/first-start#how-the-setup-is-protected).
 - Treat the URL of each honeytoken that reports with a `POST` as a secret on the sender. See [What it costs](/guides/post-reports#what-it-costs).
@@ -54,7 +54,7 @@ Nyktus is built so that a wrong setting stops the server rather than weakening i
 - Choose a neutral host name for the trigger and a neutral DNS zone, and a default redirect that fits them. See [Stealth considerations](/security/stealth).
 - Run each sensor on a host with no other purpose. Change the default banners and create a host key of its own for each SSH honeypot. See [Sensor](/guides/sensor).
 - Exclude the addresses of honeypots from your own scanners, or accept their alerts. See [Severity](/guides/honeypots#severity).
-- Set dates, owner and location of the artifacts you place so that they match their neighbors. See [Artifacts and placement](/security/stealth#artifacts-and-placement).
+- Change the names and passwords of example files before you place them, and set their dates, owner and location so that they match their neighbors. See [Files and placement](/security/stealth#files-and-placement).
 
 ## Data protection
 

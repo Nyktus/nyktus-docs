@@ -112,4 +112,4 @@ The tables `sessions`, `oidc_logins`, `event_jobs` and `alert_deliveries` change
 
 ## Backup
 
-Back up the database and the encryption keys regularly, and keep the keys separately. The database alone does not reveal the secrets it holds, such as the URLs of alert channels and the secrets of second factors, and for the same reason it cannot restore them without the keys. A backup of the database also holds events beyond the retention, so give backups a retention that fits `NYKTUS_EVENT_RETENTION_DAYS`.
+Back up the database and the encryption keys regularly, and keep the keys separately. The database alone does not reveal the secrets it holds, such as the URLs of alert channels, the secrets of second factors and the secrets of honeypots, and for the same reason it cannot restore them without the keys. A backup of the database also holds events beyond the retention, so give backups a retention that fits `NYKTUS_EVENT_RETENTION_DAYS`.

@@ -13,9 +13,8 @@ Nyktus uses a small set of terms with fixed meanings. This page defines them and
 |---|---|
 | Honeytoken | A trigger that raises an event when it is requested or resolved: a URL, an image, a QR code or a DNS name. |
 | Honeypot | A network service that the sensor emulates. It answers like the real service and offers nothing behind the login. |
-| Artifact | A file that makes a scenario believable, such as the document that holds a honeytoken's URL. An artifact never raises an event itself; the honeytokens it names do. An artifact without a honeytoken is called pocket litter. |
-| Scenario | A group of honeytokens, honeypots and artifacts that together tell one believable story. |
-| Deception | A blueprint in the catalog. Applying it creates a scenario with its resources. A deception is not an object of a running installation. |
+| Scenario | A group of honeytokens and honeypots that together tell one believable story. It holds the identifiers of the deceptions that joined it. |
+| Deception | A guide in the catalog: a story, the honeytokens and honeypots it asks for (its slots), instructions, and static example files. Applying it creates a scenario. A deception is not an object of a running installation. |
 | Catalog | The versioned collection of deceptions, with their mappings to techniques and their guides. It ships with Nyktus. |
 | Event | One recorded interaction with a honeytoken or honeypot: a request, a DNS query or a session. |
 | Incident | Correlated events. You triage incidents, not events. |
@@ -25,9 +24,9 @@ Nyktus uses a small set of terms with fixed meanings. This page defines them and
 
 ## How the parts relate
 
-A honeytoken, honeypot or artifact belongs to at most one scenario or stands alone. One installation serves one organization; there is no multi-tenancy.
+A honeytoken or honeypot belongs to at most one scenario or stands alone. One installation serves one organization; there is no multi-tenancy.
 
-Applying a deception creates a scenario with its honeytokens and artifacts and renders its guide: where to place the artifacts and how to test them. The scenario is a snapshot. A later release with a changed catalog does not change its artifacts or its guide.
+Applying a deception creates a scenario that holds the identifier of the deception and, if you ask for it, the honeytokens and honeypots of its slots. The guide, the slots and the example files are static text that Nyktus reads from the catalog when it shows them. Nyktus renders and generates nothing. You replace the placeholder for a honeytoken in a file, adapt names and passwords, and place the file yourself. A later release with a changed catalog changes what the scenario shows, not the files you placed.
 
 ## From touch to alert
 
@@ -42,6 +41,6 @@ An incident is `open`, `acknowledged` or `closed`. Close an incident when you ha
 Two frameworks of MITRE describe the two sides:
 
 - **ATT&CK techniques** describe attacker behavior. They are attached to honeytokens, honeypots, events and incidents, so that an alert says what the touch suggests.
-- **Engage activities** describe what a defender does to engage an adversary. They are attached to deceptions and scenarios, so that a scenario says which activities it carries out.
+- **Engage activities** describe what a defender does to engage an adversary. They are attached to deceptions and scenarios, so that a scenario says which activities it carries out, such as lures for a file that holds a honeytoken and pocket litter for one that does not.
 
 Neither framework is a configuration of Nyktus: the mappings document what a decoy detects and why it exists.

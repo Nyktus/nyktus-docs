@@ -124,7 +124,7 @@ The admin commands, such as [`nyktus admin reset-password`](/operate/users#when-
 
 ## Encryption keys
 
-Secrets that Nyktus must read back, such as the secrets of second factors and the URLs of [alert channels](/guides/alerting), are stored encrypted with AES-256-GCM. The keys never reach the database, so a copy of the database alone does not reveal the secrets. Keep a copy of the keys in your secret store: without them, the encrypted secrets are lost.
+Secrets that Nyktus must read back, such as the secrets of second factors, the URLs of [alert channels](/guides/alerting) and the secrets of [honeypots](/guides/honeypots#read-the-secret-again), are stored encrypted with AES-256-GCM. The keys never reach the database, so a copy of the database alone does not reveal the secrets. Keep a copy of the keys in your secret store: without them, the encrypted secrets are lost.
 
 `NYKTUS_ENCRYPTION_KEYS` holds a comma-separated list of keys, each written as `<id>:<key>`. The ID is a number from 1 to 255 that is stored with every encrypted value. The key is 32 random bytes in standard base64. Generate one with:
 
@@ -134,7 +134,7 @@ echo "1:$(openssl rand -base64 32)"
 
 The keys are required in development as well. Nyktus neither derives a key from another secret nor generates one at startup, because either would make the stored secrets unreadable once that secret or the process changes.
 
-To replace a key, put a new key with an unused ID first and keep the old one behind it, such as `2:<new key>,1:<old key>`. The first key encrypts new values; every listed key decrypts. The secret of a second factor is encrypted again with the first key the next time its user enters a code, and the secrets of an [alert channel](/guides/alerting#encryption-keys) the next time the worker delivers to it. Keep the old key listed: a value encrypted with a key that is no longer listed cannot be decrypted, so the console and the worker refuse to start while the database holds such a value, and name the ID of the missing key. To retire an old key that some accounts still use, remove their second factor, and let them set it up again.
+To replace a key, put a new key with an unused ID first and keep the old one behind it, such as `2:<new key>,1:<old key>`. The first key encrypts new values; every listed key decrypts. The secret of a second factor is encrypted again with the first key the next time its user enters a code, the secrets of an [alert channel](/guides/alerting#encryption-keys) the next time the worker delivers to it, and the console seals the secrets of all honeypots again with the first key when it starts (it logs `console: sealed secrets of honeypots again` with the counts `done` and `unreadable`). Keep the old key listed: a value encrypted with a key that is no longer listed cannot be decrypted, so the console and the worker refuse to start while the database holds such a value, and name the ID of the missing key. To retire an old key that some accounts still use, remove their second factor, and let them set it up again. A honeypot whose secret cannot be opened is replaced with a new secret.
 
 ## Client addresses
 

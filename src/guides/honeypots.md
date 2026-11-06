@@ -22,9 +22,9 @@ The service cannot be changed later, because the sensor is configured for it.
 
 ## Create one
 
-Create a honeypot in the web console, or with [`POST /api/v1/honeypots`](/api/reference/honeypots#createHoneypot) from a script. The response holds two things that exist only there:
+Create a honeypot in the web console, or with [`POST /api/v1/honeypots`](/api/reference/honeypots#createHoneypot) from a script. Add `scenario_id` to create it in a [scenario](/guides/scenarios#add-decoys). The response holds two things the sensor needs:
 
-- **The secret.** The sensor authenticates to the trigger with it: 256 random bits, 43 characters, with no prefix, so that nothing on the sensor host marks it as a decoy. Nyktus keeps only a hash. No later response, log or audit entry contains it.
+- **The secret.** The sensor authenticates to the trigger with it: 256 random bits, 43 characters, with no prefix, so that nothing on the sensor host marks it as a decoy.
 - **`sensor_config`.** The entry of this honeypot for the configuration file of the sensor: its identifier, its service, the usual port of the service and the secret. It holds neither the name nor the notes, which have no place on the host of a sensor.
 
 Store both where the sensor reads them, such as a [secret file](/guides/sensor#secrets-in-files) that only the sensor's user can read. A secret that an attacker takes from the sensor host reveals only the honeypots configured there, because every honeypot has its own.
@@ -35,9 +35,17 @@ Name and notes say where the honeypot runs and why, for example `VLAN 20, rack 4
 
 Every event of a honeypot receives its severity, whatever the attacker did, and an incident takes the highest severity of its events. A new honeypot has `medium` for every service, because a honeypot answers whoever connects, including the vulnerability scanners and inventory tools of your own team. Raise it for a honeypot that nothing in your network should ever reach, and exclude the addresses of honeypots from your own scanners where you can.
 
+### Read the secret again
+
+[`GET /api/v1/honeypots/<id>/secret`](/api/reference/honeypots#getHoneypotSecret) returns the secret and the `sensor_config` again, and the console has a button "Show the secret" on the page of a honeypot. Nyktus keeps the secret sealed with AES-256-GCM, so that you can configure a sensor later or by script, and it stands in plain text in the configuration of the sensor anyway.
+
+- **Who may read it.** The permission `honeypots:write`, not `honeypots:read`: whoever holds the secret can report sessions in the name of the sensor. A `viewer` and a key with only `honeypots:read` get `403`. The response is sent with `Cache-Control: no-store`.
+- **Audit.** Every read is recorded as `honeypot.secret_read`, never with the secret. If Nyktus cannot record the read, it sends no secret.
+- **Keys.** The sealed secrets need the [encryption keys](/operate/configuration#encryption-keys). If a secret cannot be opened, or does not match its hash, the request fails with `500`, and the reason stands in the log of the console. Replacing the secret repairs it.
+
 ### Replace the secret
 
-[`POST /api/v1/honeypots/<id>/secret`](/api/reference/honeypots#replaceHoneypotSecret) gives a honeypot a new secret, for example when the old one was lost or left on a host that was decommissioned. The old one stops working at once, so a sensor that still uses it is shut out until you configure it with the new one. The honeypot forgets what its sensor last reported, and its status is `never` until the sensor reports with the new secret. That shows you when the replacement has arrived.
+[`POST /api/v1/honeypots/<id>/secret`](/api/reference/honeypots#replaceHoneypotSecret) gives a honeypot a new secret, for example when the old one was lost or left on a host that was decommissioned. The new one is shown in the answer and can be read again. The old one stops working at once, so a sensor that still uses it is shut out until you configure it with the new one. The honeypot forgets what its sensor last reported, and its status is `never` until the sensor reports with the new secret. That shows you when the replacement has arrived.
 
 ## Status
 

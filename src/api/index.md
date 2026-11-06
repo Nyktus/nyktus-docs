@@ -40,7 +40,7 @@ Every error uses the same envelope:
 {
   "error": {
     "code": "invalid_request",
-    "message": "persona Account: is required",
+    "message": "scenario_id must be a UUID in lower case",
     "request_id": "N2TWVEHSDJGMSFXJ74M6N6VXKP"
   }
 }

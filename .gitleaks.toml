@@ -1,0 +1,15 @@
+# SPDX-FileCopyrightText: The Nyktus Authors
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+title = "Nyktus documentation"
+
+[extend]
+useDefault = true
+
+# The example files of the deception catalog hold fixed names and passwords on purpose. They are
+# decoys in a public repository, not secrets, and the copy of the catalog holds their content.
+[[allowlists]]
+description = "copy of the published deception catalog"
+paths = [
+  '''^data/deception-catalog\.json$''',
+]

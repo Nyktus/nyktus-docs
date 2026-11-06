@@ -44,16 +44,16 @@ A key holds the scopes you select and nothing else, whatever role its creator ha
 | `metrics:read` | Reading the metrics, for a monitoring system. |
 | `catalog:read` | Reading the deception catalog, which holds no inventory. |
 | `honeytokens:read`, `honeytokens:write` | Reading and managing honeytokens, for example to roll them out by script. |
-| `honeypots:read`, `honeypots:write` | Reading and managing honeypots, including replacing their secrets. |
-| `scenarios:read`, `scenarios:write` | Reading and managing scenarios. |
-| `artifacts:read`, `artifacts:write` | Reading and downloading artifacts, and keeping their placement notes or deleting them. |
+| `honeypots:read`, `honeypots:write` | Reading and managing honeypots. `honeypots:write` also reads and replaces their secrets. |
+| `scenarios:read`, `scenarios:write` | Reading and managing scenarios. Creating the honeytokens and honeypots of a deception also needs `honeytokens:write` and `honeypots:write`. |
 
-A scope to write requires the scope to read the same resource, because a key that changes a resource receives it in the responses. `scenarios:read` and `artifacts:read` also require `honeytokens:read`, because the guide of a scenario and the content of an artifact name the URLs and host names of honeytokens.
+A scope to write requires the scope to read the same resource, because a key that changes a resource receives it in the responses.
 
-Honeytokens, honeypots, scenarios and artifacts are the inventory: whoever reads them knows which URLs and hosts to avoid. Keep them away from integrations that only follow incidents:
+Honeytokens, honeypots and scenarios are the inventory: whoever reads them knows which URLs and hosts to avoid. Keep them away from integrations that only follow incidents:
 
 - A SIEM that collects alerts needs `incidents:read` and, if it should show the client address, `events:read`. Leave out every scope of the inventory.
-- A script that rolls out decoys needs `honeytokens:write`, which brings `honeytokens:read`, and the scopes of the other resources it creates.
+- A script that rolls out decoys needs `honeytokens:write`, which brings `honeytokens:read`, and the scopes of the other resources it creates. A script that applies a deception with `create_resources` needs `scenarios:write`, `honeytokens:write` and `honeypots:write`, each with its scope to read.
+- Treat `honeypots:write` as a scope that reads secrets: a key that holds it can report sessions in the name of a sensor.
 - Leave out `events:read` from every integration that does not need client addresses.
 
 ## Revoking a key
