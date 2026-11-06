@@ -59,7 +59,7 @@ Every page serves one reader and one goal. Decide both before you write, and nam
 - Keep a page short enough to read in one sitting. Split before a page needs more than three levels of headings.
 - Edit in passes: structure, cuts, sentences, words, consistency, then accuracy. Cut a third of the first draft. Do not rewrite quotations, code, error messages or labels of the interface.
 
-Published URLs are permanent. When a page moves or is renamed, add a redirect from the old path in the same change.
+Published URLs are permanent. When a page moves or is renamed, add a redirect from the old path in the same change. The web console of Nyktus links to pages of this site, some with an anchor (the heading of a section): `docsPages` in `web/src/docs.ts` of the main repository lists them. A redirect cannot keep an anchor alive, so when you rename a heading that the console links to, open the matching change there in the same go.
 
 ## Security of the documentation
 
