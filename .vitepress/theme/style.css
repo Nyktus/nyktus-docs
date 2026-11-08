@@ -665,3 +665,56 @@ body {
     display: none !important;
   }
 }
+
+/* The tiles of the home page: quiet cards that lead to the sections. */
+
+.VPHome .VPFeatures {
+  padding-top: 1rem;
+}
+
+.VPHome .VPFeature {
+  background: var(--surface-raised);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+  transition:
+    border-color 180ms var(--ease-out),
+    box-shadow 180ms var(--ease-out),
+    transform 180ms var(--ease-out);
+}
+
+.VPHome .VPFeature:hover {
+  border-color: var(--forest);
+  transform: translateY(-2px);
+}
+
+.VPHome .VPFeature .title {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.VPHome .VPFeature .details {
+  color: var(--slate);
+}
+
+.VPHome .VPFeature .link-text-value {
+  color: var(--forest);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .VPHome .VPFeature {
+    transition: none;
+  }
+
+  .VPHome .VPFeature:hover {
+    transform: none;
+  }
+}
+
+/* VitePress lays out nine tiles in two columns, which leaves the last one alone. */
+@media (min-width: 960px) {
+  .VPHome .VPFeatures .item {
+    width: 33.3333%;
+  }
+}
