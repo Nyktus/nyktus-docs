@@ -7,7 +7,7 @@ description: How the first administrator is created, and how the setup URL is pr
 
 A new installation has no accounts. The first administrator is created through a setup URL that only the operator of the server can see. There is no public registration: without the URL, whoever reached a fresh installation first could claim it.
 
-This page explains how the setup works and why it is safe to run. The commands that bring an installation to this point are on the [database setup](/operate/database) page, and the [quickstart](/getting-started/quickstart) runs them on one machine.
+This page explains how the setup works and why it is safe to run. [Deploy](/operate/deploy) brings an installation to this point, and the [quickstart](/getting-started/quickstart) runs the steps on one machine.
 
 ## Create the first administrator
 

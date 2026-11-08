@@ -9,14 +9,14 @@ Nyktus is built so that a wrong setting stops the server rather than weakening i
 
 ## Topology
 
-- Run `trigger` and `dns` on a host of their own that the internet can reach, and `console` and `worker` on internal hosts outside the environment they watch. A process with several roles holds all their database logins. See [Architecture](/getting-started/architecture#where-to-run-what).
+- Run `trigger` and `dns` on a host of their own that the internet can reach (an internal-only trigger is possible and has [limits](/operate/deploy#decide-where-the-trigger-is-reachable)), and `console` and `worker` on internal hosts outside the environment they watch. A process with several roles holds all their database logins. See [Architecture](/getting-started/architecture#where-to-run-what).
 - Use different host names for the console and the trigger. Nyktus refuses to start otherwise. See [Reverse proxy](/operate/reverse-proxy#the-trigger).
 - Keep the console off the public internet. Anyone who reaches the sign-in can lock an account for 15 minutes at a time. See [Failed sign-ins](/operate/sign-in#failed-sign-ins).
 - Leave `NYKTUS_ENV` at `production`. Development relaxes the checks that protect an installation. See [Configuration](/operate/configuration#all-commands).
 
 ## Database
 
-- Create the logins of the roles as [Database setup](/operate/database#set-up) shows, and never start a role with the login of the owner. The server checks this outside development.
+- Create the logins of the roles with the script of [Database setup](/operate/database#set-up), and never start a role with the login of the owner. The server checks this outside development.
 - Run one installation per PostgreSQL cluster, because database roles are global to a cluster.
 - Allow the connections of the internet-facing host for its own logins only, and over TLS.
 - Back up the database and, separately, the encryption keys. Give backups a retention that fits the [retention of events](/guides/incidents#retention) and the [audit log](/operate/audit-log#retention). See [Backup](/operate/database#backup).
