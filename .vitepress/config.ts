@@ -190,7 +190,7 @@ export default defineConfig({
 
     footer: {
       message:
-        'Text under CC BY-SA 4.0. MITRE, ATT&CK and MITRE Engage are trademarks of The MITRE Corporation; Nyktus is not affiliated with or endorsed by MITRE. Typefaces: <a href="/licenses/OFL-SchibstedGrotesk.txt">Schibsted Grotesk</a> and <a href="/licenses/OFL-JetBrainsMono.txt">JetBrains Mono</a> under the SIL Open Font License.',
+        'Text under CC BY-SA 4.0. MITRE, ATT&CK and MITRE Engage are trademarks of The MITRE Corporation; Nyktus is not affiliated with or endorsed by MITRE. Typefaces: <a href="/licenses/OFL-SchibstedGrotesk.txt">Schibsted Grotesk</a> and <a href="/licenses/OFL-JetBrainsMono.txt">JetBrains Mono</a> under the SIL Open Font License. <a href="https://nyktus.org/impressum/">Impressum</a> · <a href="https://nyktus.org/datenschutz/">Datenschutzerklärung</a>',
       copyright: 'Copyright © The Nyktus Authors',
     },
   },
