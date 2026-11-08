@@ -18,7 +18,27 @@ The sensor `nyktus-sensor` runs your [honeypots](/guides/honeypots) inside the n
 
 ## Install
 
-Build the sensor from the source of Nyktus. `make build` writes `bin/nyktus-sensor` next to `bin/nyktus`. The sensor is a Go module of its own with two dependencies, a YAML parser and the SSH library of the Go project, and one static binary that you may rename. `nyktus-sensor version` prints its version, which the sensor also sends with every heartbeat.
+The sensor is released apart from the server, under its own tag `sensor/vX.Y.Z`. It is one static binary that you may rename, with a YAML parser and the SSH library of the Go project as its only dependencies. Download the archive for the host, the checksums and their signature, and check them as [Deploy](/operate/deploy#get-the-release) shows for the server. The identity of the signature ends with `@refs/tags/sensor/v` instead of `@refs/tags/v`:
+
+```sh
+base=https://github.com/Nyktus/nyktus/releases/download/sensor/v0.1.0
+curl -fLO "$base/nyktus-sensor_0.1.0_linux_amd64.tar.gz"
+curl -fLO "$base/checksums.txt"
+curl -fLO "$base/checksums.txt.sigstore.json"
+cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/Nyktus/nyktus/\.github/workflows/release\.yml@refs/tags/sensor/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+sha256sum --check --ignore-missing checksums.txt
+tar -xzf nyktus-sensor_0.1.0_linux_amd64.tar.gz nyktus-sensor
+```
+
+Archives exist for Linux on x86-64 and arm64 and for macOS on arm64. `nyktus-sensor version` prints the version, which the sensor also sends with every heartbeat:
+
+```text
+0.1.0
+```
+
+To build the sensor from the source instead, run `make build`, which writes `bin/nyktus-sensor` next to `bin/nyktus`. A build from a checkout reports `devel` as its version, because the toolchain does not read the tag of a module in a subdirectory.
 
 Update the server before the sensors. The server refuses a report of a version it does not know.
 
@@ -210,6 +230,10 @@ WantedBy=multi-user.target
 The sensor writes no file. Remove `AmbientCapabilities` if every honeypot listens on a port from 1024. Restart the service after you change the configuration.
 
 ### Containers
+
+The image `ghcr.io/nyktus/nyktus-sensor` holds the binary of the archive, for Linux on x86-64 and arm64, with no shell. It runs as the user `65532` and starts `nyktus-sensor run -config /etc/nyktus-sensor/sensor.yaml`, so mount the directory with your configuration at `/etc/nyktus-sensor`. Check its signature like that of the archive, with `cosign verify` and the same identity. `deploy/compose/sensor.compose.yaml` of the source runs it with the settings below.
+
+A secret file and a host key file that the configuration names must not be readable by the group or by others, or the sensor refuses to start. Give them to the user `65532` with the mode `0600`.
 
 Run the sensor as a user other than root, with a read-only root file system, all capabilities dropped and `no-new-privileges`, and let it listen on a port from 1024. Map the port you want on the host to the port in the container, such as `-p 23:2323` with `listen: ":2323"`. The report names the port that the attacker reached *in the container*, here `2323`. Mount the configuration file and the secret files so that only the user of the container can read them.
 
