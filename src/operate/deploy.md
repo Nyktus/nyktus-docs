@@ -1,22 +1,33 @@
 ---
 title: Deploy
-description: Get and verify a release of Nyktus, give each server role its own settings, and run the roles on separate hosts under systemd or Compose.
+description: Install Nyktus from a release or with containers, decide whether the trigger is reachable from the internet, and run the roles under systemd or Compose.
 ---
 
 # Deploy
 
-This page takes you from a release to an installation that runs each server role on the host where it belongs. Afterwards your team reaches the console, the internet reaches the trigger, and the roles start again after a reboot. Read [Architecture](/getting-started/architecture) first if you have not decided which role runs where.
+This page takes you from a release to an installation that runs each server role where it belongs, either as binaries under systemd or as containers. Afterwards your team reaches the console, the trigger answers, and the roles start again after a reboot. [Architecture](/getting-started/architecture) explains the roles.
+
+## Decide where the trigger is reachable
+
+The console and the worker stay internal, outside the environment Nyktus watches. For the trigger you choose, and the choice decides what Nyktus can see:
+
+| | Reachable from the internet (recommended) | Internal only |
+|---|---|---|
+| Needs | A host the internet can reach, with a reverse proxy | An internal host that your monitored networks can reach |
+| Sees | A honeytoken opened anywhere, including a stolen document opened on the intruder's infrastructure; reports of cloud services; sensors in other networks | Only what happens inside the networks that reach the trigger |
+| Misses | Nothing of this | Data that leaves the network and is opened outside. Cloud audit-log [webhooks](/guides/cloud-webhooks) and sensors in a cloud network work only if they have a route to the trigger. |
+
+DNS honeytokens need the DNS role on a host that the resolvers of the internet reach, see [DNS honeytokens](/guides/dns-honeytokens). The internal-only variant is a fit for a closed network. Everything else on this page is the same for both; only the host of the `trigger` changes.
 
 ## What you need
 
-- **Two hosts at least.** One internal host for the roles `console` and `worker`, and one host that the internet can reach for `trigger` and, for [DNS honeytokens](/guides/dns-honeytokens), `dns`. The internal host must lie outside the environment that Nyktus watches.
-- **PostgreSQL 16 or later**, set up as [Database setup](/operate/database) describes, reachable from both hosts. Allow the connections of the internet-facing host for its own logins only, and over TLS.
-- **Two host names** with certificates: one for the console and one for the trigger. They must differ, and the trigger name should name neither Nyktus nor a decoy, see [the address of the trigger](/guides/honeytokens#the-address-of-the-trigger).
-- **A reverse proxy** on each of these hosts, see [Reverse proxy](/operate/reverse-proxy).
+- **PostgreSQL 16 or later**, reachable from the hosts of all roles. Allow the connections of an internet-facing host for its own login only, and over TLS.
+- **Two host names** with certificates, one for the console and one for the trigger. They must differ, and the trigger name should name neither Nyktus nor a decoy, see [the address of the trigger](/guides/honeytokens#the-address-of-the-trigger).
+- **A reverse proxy** in front of the console and of the trigger, see [Reverse proxy](/operate/reverse-proxy). The Compose installation below brings one.
 
 ## Get the release
 
-Each release publishes an archive per platform and a signed image. The archives hold `nyktus` (one binary for all roles, with the web console embedded), the licence and a notice. The sensor is released apart, see [the sensor](/guides/sensor#install).
+Skip this section if you run only containers. Each release publishes an archive per platform for Linux on x86-64 and arm64 and for macOS on arm64. The archive holds `nyktus`, one binary for all roles with the web console embedded, the licence and a notice, and has an SBOM (`*.sbom.spdx.json`) that lists the Go modules in the binary. The sensor is released apart, see [the sensor](/guides/sensor#install).
 
 Download the archive for your platform, the checksums and their signature. Version `0.1.0` for Linux on x86-64:
 
@@ -40,65 +51,58 @@ The first command prints `Verified OK`, the second `nyktus_0.1.0_linux_amd64.tar
 
 ```sh
 tar -xzf nyktus_0.1.0_linux_amd64.tar.gz nyktus
-./nyktus version
+sudo install -m 0755 nyktus /usr/local/bin/nyktus
+nyktus version
 ```
 
 ```text
 v0.1.0
 ```
 
-Archives exist for Linux on x86-64 and arm64 and for macOS on arm64. Each has an SBOM (`*.sbom.spdx.json`) that lists the Go modules in the binary.
+To build from the source instead, you need Go 1.26 and Node.js 24. Check out the tag and run `make build`, which writes `bin/nyktus` and `bin/nyktus-sensor`.
 
-To build from the source instead, you need Go 1.26 and Node.js 24 on a build machine. Check out the tag and run `make build`, which writes `bin/nyktus` and `bin/nyktus-sensor`.
+## Set up the database
 
-## Give each role its own settings
+[Database setup](/operate/database#set-up) creates the database, a login for each role and the files with their connection URLs, and applies the migrations. Do it before you start a role. The Compose installation below sets up its own database; skip this section for it.
 
-A process reads only the settings of the roles it runs, and a process that runs several roles holds the database logins of all of them. Run each role as a process of its own, and give each one only its own settings. This is the minimum for each role. The values are examples; [Configuration](/operate/configuration) lists every setting.
+## Settings of the roles
 
-`console.env`, for the internal host:
+A process reads only the settings of the roles it runs, and a process that runs several roles holds the database logins of all of them. Run each role as a process of its own, with a file of its own. The database login comes from the file that [Database setup](/operate/database#set-up) wrote, so the settings below are the rest. The values are examples; [Configuration](/operate/configuration) lists every setting.
 
-```sh
+::: code-group
+
+```sh [console.env]
 NYKTUS_CONSOLE_URL=https://nyktus.example.com
 NYKTUS_TRIGGER_URL=https://t.example.net
 NYKTUS_TRUSTED_PROXIES=127.0.0.1
 NYKTUS_ENCRYPTION_KEYS=1:<32 random bytes in base64>
-NYKTUS_CONSOLE_DATABASE_URL=postgres://nyktus_console_login:<console password>@db.internal.example.net/nyktus?sslmode=verify-full
 ```
 
-`worker.env`, for the same host:
-
-```sh
+```sh [worker.env]
 NYKTUS_CONSOLE_URL=https://nyktus.example.com
 NYKTUS_ENCRYPTION_KEYS=1:<the same key as for the console>
-NYKTUS_WORKER_DATABASE_URL=postgres://nyktus_worker_login:<worker password>@db.internal.example.net/nyktus?sslmode=verify-full
 ```
 
-`trigger.env`, for the internet-facing host:
-
-```sh
+```sh [trigger.env]
 NYKTUS_TRIGGER_DEFAULT_REDIRECT=https://www.example.com/
 NYKTUS_TRUSTED_PROXIES=127.0.0.1
-NYKTUS_TRIGGER_DATABASE_URL=postgres://nyktus_trigger_login:<trigger password>@db.example.net/nyktus?sslmode=verify-full
 ```
 
-`dns.env`, for the same host, if you use DNS honeytokens:
-
-```sh
+```sh [dns.env]
 NYKTUS_DNS_ZONES=d.example.net
 NYKTUS_DNS_NAMESERVERS=ns1.example.net
 NYKTUS_DNS_ANSWER_IPV4=203.0.113.80
-NYKTUS_DNS_DATABASE_URL=postgres://nyktus_dns_login:<dns password>@db.example.net/nyktus?sslmode=verify-full
 ```
 
-The console needs the same `NYKTUS_DNS_ZONES` as the DNS role if you use DNS honeytokens, and the worker needs the SMTP settings if you use email channels. Nyktus listens on the loopback address by default, which suits a reverse proxy on the same host.
+:::
 
-Each file holds passwords and the encryption key. Make it readable by its administrator only, and keep a copy of the encryption key somewhere else, because without it the encrypted secrets are lost, see [Encryption keys](/operate/configuration#encryption-keys). A variable also accepts a file instead, with the suffix `_FILE`, for secret stores that mount files.
+Generate the key with `openssl rand -base64 32`. The console needs the same `NYKTUS_DNS_ZONES` as the DNS role if you use DNS honeytokens, and the worker needs the SMTP settings if you use email channels. Nyktus listens on the loopback address by default, which suits a reverse proxy on the same host.
 
-Apply the migrations before the first start, as [Database setup](/operate/database#set-up) shows.
+Put the file of a role and its `<role>.db.env` side by side on the host of the role, as `/etc/nyktus/<role>.env` and `/etc/nyktus/<role>.db.env`, readable by its administrator only. Keep a copy of the encryption key somewhere else, because without it the encrypted secrets are lost, see [Encryption keys](/operate/configuration#encryption-keys). A variable also accepts a file instead, with the suffix `_FILE`, for secret stores that mount files.
 
 ## Run with systemd
 
-One unit template runs every role. The name after the `@` is the role, and the unit reads `/etc/nyktus/<role>.env`. Save it as `/etc/systemd/system/nyktus@.service`:
+One unit template runs every role. The name after the `@` is the role, and the unit reads `/etc/nyktus/<role>.env` and `/etc/nyktus/<role>.db.env`. Save it as `/etc/systemd/system/nyktus@.service`:
 
 ```ini
 [Unit]
@@ -109,6 +113,7 @@ Wants=network-online.target
 [Service]
 User=nyktus
 EnvironmentFile=/etc/nyktus/%i.env
+EnvironmentFile=/etc/nyktus/%i.db.env
 ExecStart=/usr/local/bin/nyktus serve --roles=%i
 Restart=on-failure
 RestartSec=5s
@@ -137,11 +142,11 @@ Create the user and the directory, install the files, and start the roles of the
 ```sh
 sudo useradd --system --no-create-home --shell /usr/sbin/nologin nyktus
 sudo install -d -m 0755 /etc/nyktus
-sudo install -m 0600 console.env worker.env /etc/nyktus/
+sudo install -m 0600 console.env worker.env nyktus-database/console.db.env nyktus-database/worker.db.env /etc/nyktus/
 sudo systemctl enable --now nyktus@console nyktus@worker
 ```
 
-On the internet-facing host, install `trigger.env` and `dns.env` the same way and start `nyktus@trigger` and `nyktus@dns`. The DNS role listens on `127.0.0.1:8053` by default. To let it listen on port 53 without a privilege of the user, give the role a drop-in with `sudo systemctl edit nyktus@dns`, and set `NYKTUS_DNS_ADDR=0.0.0.0:53` in `dns.env`:
+On the host of the trigger, install `trigger.env` and `trigger.db.env` the same way and start `nyktus@trigger`. For the DNS role, do the same with `dns.env` and `dns.db.env`. It listens on `127.0.0.1:8053` by default. To let it listen on port 53 without a privilege of the user, give the role a drop-in with `sudo systemctl edit nyktus@dns`, and set `NYKTUS_DNS_ADDR=0.0.0.0:53` in `dns.env`:
 
 ```ini
 [Service]
@@ -161,18 +166,33 @@ cosign verify ghcr.io/nyktus/nyktus:0.1.0 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-The directory `deploy/compose` of the source holds a reference installation for one host: PostgreSQL, the migrations, every role, and an nginx container that serves the console over HTTPS. It is the starting point for an installation with real data, which `deploy/dev` is not. Its README is the guide:
+The directory `deploy/compose` of the source holds a reference installation for one host: PostgreSQL with its logins, the migrations, every role and an nginx container that serves the console over HTTPS. It sets up the database itself, so it needs neither the script nor the files of the sections above. Its README is the guide:
 
-- Every setting comes from `.env`. The file lists them, with a command for each secret, and Compose refuses to start while a required one is empty.
-- The roles run in read-only containers without capabilities, as a user without root, and each connects to the database with its own login. The worker is a container of its own.
+- Every setting comes from `.env`. The file lists them, with a command for each secret, and Compose refuses to start while a required one is empty. Leave the example values of the DNS and `trigger-proxy` settings in it if you do not use those profiles, because Compose reads all services.
+- The roles run in read-only containers without capabilities, as a user without root. The worker is a container of its own.
 - The console is reachable through the proxy only, on the address of `NYKTUS_CONSOLE_BIND`: use an internal address, because the console does not belong on the internet.
-- The trigger publishes its port on the loopback address for a proxy of your own. The profile `trigger-proxy` adds an nginx for it that logs no request and answers like the trigger where it answers itself. The profile `dns` adds the DNS role on port 53.
+- The trigger publishes its port on the loopback address for a proxy of your own, or on the address of `NYKTUS_TRIGGER_BIND` for an internal-only trigger. The profile `trigger-proxy` adds an nginx for it that logs no request and answers like the trigger where it answers itself. The profile `dns` adds the DNS role on port 53.
 - The certificates are files you provide. The reference starts no certificate client.
 - An upgrade changes `NYKTUS_VERSION`, then `docker compose pull` and `docker compose up --detach`; the migrations run first.
 
-Compose reads all services, also those of a profile you do not use, so leave the example values of the DNS and trigger-proxy settings in `.env` if you do not use them.
+### Containers on separate hosts
 
-To run the roles on separate hosts, as this page describes, use the same images with the commands and settings of the sections above: `serve --roles=trigger` and the settings of `trigger.env`, in a container that publishes the port on the loopback address.
+To run a role on a host of its own, for example the trigger at the edge, use the image with the files of the sections above. The container listens on all of its addresses, and Docker publishes the port on the loopback address for the reverse proxy:
+
+```sh
+docker run --detach --name nyktus-trigger --restart unless-stopped \
+  --read-only --cap-drop ALL --security-opt no-new-privileges:true \
+  --env-file /etc/nyktus/trigger.env --env-file /etc/nyktus/trigger.db.env \
+  --env NYKTUS_TRIGGER_ADDR=0.0.0.0:8081 \
+  --publish 127.0.0.1:8081:8081 \
+  ghcr.io/nyktus/nyktus:0.1.0 serve --roles=trigger
+```
+
+For the DNS role, use `serve --roles=dns`, `NYKTUS_DNS_ADDR=0.0.0.0:8053` and `--publish 53:8053/udp --publish 53:8053/tcp`. Without the binary on the host, apply the migrations with the image and the file of the owner:
+
+```sh
+docker run --rm --env-file nyktus-database/owner.db.env ghcr.io/nyktus/nyktus:0.1.0 migrate
+```
 
 ## Check the installation
 

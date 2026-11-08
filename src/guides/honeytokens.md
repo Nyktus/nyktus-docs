@@ -71,7 +71,7 @@ The value cannot be changed. If a URL has been exposed to people who should not 
 
 `NYKTUS_TRIGGER_URL` is the public address of the trigger, and every URL starts with it. Whoever finds a honeytoken sees it, and so do the systems that loaded it.
 
-- **Reachable from the internet.** Stolen documents are opened on the intruder's infrastructure, not in your network. The console stays internal. Nyktus refuses to start when both addresses name the same host.
+- **Reachable from the internet.** Stolen documents are opened on the intruder's infrastructure, not in your network. A trigger that only your network reaches sees nothing of that, see [Deploy](/operate/deploy#decide-where-the-trigger-is-reachable). The console stays internal. Nyktus refuses to start when both addresses name the same host.
 - **Inconspicuous.** Use a host name that names neither Nyktus nor a decoy. The [stealth considerations](/security/stealth) explain why.
 - **Stable.** The address is part of every placed URL. Changing it breaks the honeytokens you have placed.
 

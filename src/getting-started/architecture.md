@@ -41,7 +41,7 @@ Install the sensor on a host that has no other purpose, in the segment where an 
 Nyktus is built so that the console and the alert path sit outside the environment they watch. An intruder who controls the monitored network should neither see which assets are decoys nor be able to suppress the alert.
 
 - **Trying it out:** one process can run all roles. It then holds the database login of every role, so the internet-facing roles lose the separation described above. Use it to try Nyktus; separate the roles for operation.
-- **Operation:** run `trigger` and `dns` on a host of their own that the internet can reach, behind a reverse proxy in the case of the trigger. Run `console` and `worker` on internal hosts outside the environment they watch. The address of the trigger and the address of the console must use different hosts.
+- **Operation:** run `trigger` and `dns` on a host of their own that the internet can reach (the trigger may stay internal if you accept what that [costs](/operate/deploy#decide-where-the-trigger-is-reachable)), behind a reverse proxy in the case of the trigger. Run `console` and `worker` on internal hosts outside the environment they watch. The address of the trigger and the address of the console must use different hosts.
 - **PostgreSQL:** run one Nyktus installation per PostgreSQL cluster, because database roles are global to a cluster.
 
 Sensors report to the trigger over HTTPS and send nothing else, so the monitored network needs outbound access to that one address.

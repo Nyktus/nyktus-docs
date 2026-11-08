@@ -1,44 +1,88 @@
 ---
 title: Database setup
-description: Create the PostgreSQL roles and database that Nyktus needs, and what the worker keeps clean.
+description: Set up the PostgreSQL database, the owner and the logins of the server roles with one script, apply the migrations, and learn what the worker keeps clean.
 ---
 
 # Database setup
 
-Nyktus stores all state in PostgreSQL 16 or later. Each server role connects with a login of its own that holds only the privileges the role needs, and migrations run as a separate owner. This page sets that up for an installation you operate; [Deploy](/operate/deploy) shows how to run the roles afterwards. To try Nyktus on one machine first, the [quickstart](/getting-started/quickstart) runs the same steps against a throwaway database.
+Nyktus stores all state in PostgreSQL 16 or later. After this page you have a database with a login for each server role and the migrations applied, from one script and one command. To try Nyktus on one machine first, the [quickstart](/getting-started/quickstart) runs the same steps against a throwaway database.
 
-## The roles
+## What the script creates
 
-| Role | Kind | Purpose |
-|---|---|---|
-| `nyktus_owner` (any name) | Login | Owns the database and the `public` schema and runs `nyktus migrate`. A running server never uses it. |
-| `nyktus_console`, `nyktus_trigger`, `nyktus_dns`, `nyktus_worker` | Group, created by `roles.sql` | Receive the privileges of their server role through the migrations. |
-| One login for each role you run (any name) | Login, member of the group | The server role connects with it, through `NYKTUS_CONSOLE_DATABASE_URL`, `NYKTUS_TRIGGER_DATABASE_URL`, `NYKTUS_DNS_DATABASE_URL` and `NYKTUS_WORKER_DATABASE_URL`. |
+Each server role connects with a login of its own that holds only the privileges the role needs, and the migrations run as a separate owner:
 
-The point of this separation is what an internet-facing role cannot do, which [Architecture](/getting-started/architecture#what-the-internet-facing-roles-can-reach) explains. In short, the trigger and the DNS role can read no table, and each can record only its own kind of request: a login of the trigger cannot record DNS queries, and the other way round. Migrations grant privileges to the group roles and never create roles, so the owner needs no `CREATEROLE`.
+| Role | Purpose |
+|---|---|
+| `nyktus_owner` | Owns the database and runs `nyktus migrate`. A running server never uses it. |
+| `nyktus_console_login`, `nyktus_trigger_login`, `nyktus_worker_login`, and `nyktus_dns_login` with `--dns` | The login of one server role. Each is a member of the group role of its server role, which the migrations grant the privileges. |
 
-Role names are global to a PostgreSQL cluster. Run one Nyktus installation per cluster.
+The point of this separation is what an internet-facing role cannot do, which [Architecture](/getting-started/architecture#what-the-internet-facing-roles-can-reach) explains: the trigger and the DNS role can read no table, and each can record only its own kind of request. Role names are global to a PostgreSQL cluster, so run one Nyktus installation per cluster.
 
 ## Set up
 
-Run the following as a superuser such as `postgres`, and choose your own passwords.
+You need the `psql` client, `openssl`, and a PostgreSQL superuser such as `postgres`. The script `setup.sh` and the file `roles.sql` it uses come with the source in `deploy/postgres/`. Download both from the tag of your release:
 
-1. Create the group roles with `deploy/postgres/roles.sql` from the source. The script can run any number of times, and you run it again after an upgrade that adds a server role.
+```sh
+base=https://raw.githubusercontent.com/Nyktus/nyktus/v0.2.0/deploy/postgres
+mkdir nyktus-database-setup && cd nyktus-database-setup
+curl -fL -O "$base/setup.sh" -O "$base/roles.sql"
+```
+
+Read the script before you run it; it is short. It connects as the superuser you name with the usual `PG*` variables. `--client-host` is the address that the Nyktus hosts use to reach the database, and it goes into the connection URLs. It differs from `PGHOST` when you run the script on the database host itself:
+
+```sh
+PGHOST=db.internal.example.net PGUSER=postgres \
+  sh setup.sh --client-host db.internal.example.net --dns
+```
+
+```text
+Created the database nyktus and the logins of: owner console trigger worker dns
+The connection URLs are in ./nyktus-database/, one file per login. They hold the passwords.
+Next: apply the migrations with the URL of the owner (see Database setup).
+```
+
+The script generates a random password for each login and writes it to a file, never to the terminal. The directory `nyktus-database/` then holds one file per login, readable by you only, for example `console.db.env` with the line `NYKTUS_CONSOLE_DATABASE_URL=postgres://nyktus_console_login:<password>@db.internal.example.net/nyktus?sslmode=verify-full`.
+
+| Option | Meaning |
+|---|---|
+| `--client-host HOST[:PORT]` | The address in the URLs. Default: `PGHOST` and `PGPORT`. |
+| `--sslmode MODE` | The `sslmode` of the URLs. Default: `verify-full`, which needs TLS on the database with a certificate for that host name. Use `disable` only on a database that no network reaches. |
+| `--dns` | Also create the login of the DNS role, for [DNS honeytokens](/guides/dns-honeytokens). |
+| `--out DIRECTORY` | Where the files go. Default: `./nyktus-database`. |
+| `--database NAME` | The name of the database. Default: `nyktus`. |
+
+The script stops with a message, and changes nothing, if the owner, a login or the database exists already, so it never resets the password of a running installation. If it fails half-way, drop the roles and the database it named and run it again.
+
+Apply the migrations with the URL of the owner. The subshell keeps the password out of your shell and out of the process list:
+
+```sh
+(set -a; . ./nyktus-database/owner.db.env; nyktus migrate)
+```
+
+```text
+{"time":"2026-11-08T17:03:01.332418+01:00","level":"INFO","msg":"migrate: applied migration","version":1,"name":"initial"}
+{"time":"2026-11-08T17:03:01.33342+01:00","level":"INFO","msg":"migrate: done","applied":1,"total":1}
+```
+
+Keep `owner.db.env` in your secret store, because every upgrade runs the migrations again, and give each other file to the host of its role. [Deploy](/operate/deploy#settings-of-the-roles) shows where it goes. Delete the directory from the machine where you ran the script.
+
+::: details Set up the database by hand
+Use this if you have no superuser, for example on a managed database, or want to name the roles yourself. Run the following as a role that may create roles and databases, and choose your own passwords.
+
+1. Create the group roles with `roles.sql`. The script can run any number of times, and you run it again after an upgrade that adds a server role:
 
    ```sh
-   psql --file=deploy/postgres/roles.sql
+   psql --file=roles.sql
    ```
 
-2. Create the owner and the database. The database must use the `UTF8` encoding, and migrations stop otherwise. If the default encoding of your cluster differs, add `TEMPLATE template0`.
+2. Create the owner and the database. The database must use the `UTF8` encoding, and migrations stop otherwise. Creating a database for another role needs `CREATEDB` and, since PostgreSQL 16, the right to `SET ROLE` to the owner, which is more than `CREATEROLE`:
 
    ```sql
    CREATE ROLE nyktus_owner LOGIN PASSWORD '<owner password>';
-   CREATE DATABASE nyktus OWNER nyktus_owner ENCODING 'UTF8';
+   CREATE DATABASE nyktus OWNER nyktus_owner ENCODING 'UTF8' TEMPLATE template0;
    ```
 
-   Creating a database for another role needs `CREATEDB` and, since PostgreSQL 16, the right to `SET ROLE` to the owner, which is more than `CREATEROLE`. In a cluster upgraded from PostgreSQL 14 or earlier, the template database can still assign the `public` schema to the bootstrap superuser. Then transfer it: connect to the `nyktus` database and run `ALTER SCHEMA public OWNER TO nyktus_owner;`.
-
-3. Create the logins of the roles you run, as members of their group roles, and do not create them with `NOINHERIT`:
+3. Create the logins of the roles you run as members of their group roles. Do not create them with `NOINHERIT`, and name each in the matching `NYKTUS_<ROLE>_DATABASE_URL`:
 
    ```sql
    CREATE ROLE nyktus_console_login LOGIN PASSWORD '<console password>' IN ROLE nyktus_console;
@@ -47,39 +91,10 @@ Run the following as a superuser such as `postgres`, and choose your own passwor
    CREATE ROLE nyktus_worker_login  LOGIN PASSWORD '<worker password>'  IN ROLE nyktus_worker;
    ```
 
-4. Apply the migrations as the owner:
+4. Apply the migrations with `NYKTUS_DATABASE_URL` set to the URL of the owner, as above.
 
-   ```sh
-   NYKTUS_DATABASE_URL='postgres://nyktus_owner:<owner password>@db/nyktus' nyktus migrate
-   ```
-
-5. Start the roles, each with its login. On the first start the console prints the setup URL; see [First start](/operate/first-start).
-
-   ```sh
-   NYKTUS_CONSOLE_DATABASE_URL='postgres://nyktus_console_login:<console password>@db/nyktus' \
-   NYKTUS_CONSOLE_URL='https://nyktus.example.com' \
-   NYKTUS_TRIGGER_URL='https://t.example.net' \
-   NYKTUS_ENCRYPTION_KEYS_FILE=/run/secrets/nyktus-keys \
-     nyktus serve --roles=console
-
-   NYKTUS_TRIGGER_DATABASE_URL='postgres://nyktus_trigger_login:<trigger password>@db/nyktus' \
-   NYKTUS_TRIGGER_DEFAULT_REDIRECT='https://www.example.com/' \
-     nyktus serve --roles=trigger
-
-   NYKTUS_DNS_DATABASE_URL='postgres://nyktus_dns_login:<dns password>@db/nyktus' \
-   NYKTUS_DNS_ZONES='d.example.net' \
-   NYKTUS_DNS_NAMESERVERS='ns1.example.net' \
-     nyktus serve --roles=dns
-
-   NYKTUS_WORKER_DATABASE_URL='postgres://nyktus_worker_login:<worker password>@db/nyktus' \
-   NYKTUS_CONSOLE_URL='https://nyktus.example.com' \
-   NYKTUS_ENCRYPTION_KEYS_FILE=/run/secrets/nyktus-keys \
-     nyktus serve --roles=worker
-   ```
-
-   The console and the worker need the same encryption keys. Without a worker, events are recorded but never become incidents. The DNS role is needed only for DNS honeytokens, and the settings of every role are in the [configuration reference](/operate/configuration).
-
-When the trigger or the DNS role runs on a host of its own, for example in a DMZ, allow the database connections from that host only for its own login, and over TLS.
+The server checks the logins when it starts, see [the privilege check](#the-privilege-check).
+:::
 
 ## The privilege check
 
