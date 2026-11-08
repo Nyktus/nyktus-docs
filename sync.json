@@ -1,6 +1,6 @@
 {
   "repository": "Nyktus/nyktus",
-  "ref": "7f9b7ec2530d9f667ffcd1553dcedc41e2a219a0",
+  "ref": "43200968eab5202b5b66aaee87e6ae49dee5959d",
   "files": {
     "data/openapi.yaml": {
       "source": "api/openapi.yaml",
