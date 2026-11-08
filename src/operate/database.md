@@ -23,7 +23,7 @@ The point of this separation is what an internet-facing role cannot do, which [A
 You need the `psql` client, `openssl`, and a PostgreSQL superuser such as `postgres`. The script `setup.sh` and the file `roles.sql` it uses come with the source in `deploy/postgres/`. Download both from the tag of your release:
 
 ```sh
-base=https://raw.githubusercontent.com/Nyktus/nyktus/v0.1.1/deploy/postgres
+base=https://raw.githubusercontent.com/Nyktus/nyktus/v0.2.0/deploy/postgres
 mkdir nyktus-database-setup && cd nyktus-database-setup
 curl -fL -O "$base/setup.sh" -O "$base/roles.sql"
 ```
