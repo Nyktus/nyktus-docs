@@ -12,7 +12,7 @@ Put a reverse proxy in front of the console and in front of the trigger. This pa
 - **`NYKTUS_CONSOLE_URL` must be exactly the address users open in the browser**, including the port if it is not the default. A request that changes state, such as a sign-in, is rejected with `403` and the code `cross_origin` when the browser reports another origin. This protects sessions against requests from other sites, including pages on other subdomains of your domain. The web console shows the code as a notice that the address in the browser differs from the configured one.
 - **Pass the `Origin` header to the console unchanged.**
 - **Serve it over HTTPS.** The session cookie is `Secure`, so the console must be reached over HTTPS. Browsers also accept it on `http://localhost` and `http://127.0.0.1` during development.
-- **Rate-limit the sign-in routes per client address:** `POST /api/v1/session`, `POST /api/v1/session/second-factor`, `GET /api/v1/oidc/authorize`, `GET /api/v1/oidc/callback`, `POST /api/v1/activation` and `POST /api/v1/password-reset`. Each request to `GET /api/v1/oidc/authorize` stores a sign-in for ten minutes, which the worker removes within five minutes after it expires, and anyone can make it without an account.
+- **Rate-limit the sign-in routes per client address:** `POST /api/v1/session`, `POST /api/v1/session/second-factor`, `GET /api/v1/oidc/authorize`, `GET /api/v1/oidc/callback`, `POST /api/v1/activation`, `POST /api/v1/password-reset` and `POST /api/v1/setup`. The last one creates the first administrator with the setup token and answers `404` once an administrator exists. Each request to `GET /api/v1/oidc/authorize` stores a sign-in for ten minutes, which the worker removes within five minutes after it expires, and anyone can make it without an account.
 - **Keep the console off the public internet.** Anyone who can reach the sign-in can lock an account, including the only administrator, for 15 minutes at a time.
 
 The proxy of the console needs no other care. The console is internal, and only the trigger and the DNS role have to be reached from the internet.
@@ -43,9 +43,11 @@ The DNS role is not an HTTP service and needs no proxy. Resolvers reach it on po
 
 ## Example: nginx
 
+The directory `deploy/compose` of the source holds a complete configuration for nginx in containers: the TLS settings, HSTS, the limits below, and a proxy for the trigger that logs no request. Its README explains it. The examples here are for nginx on the host.
+
 The console and the trigger run on different hosts, so each host gets its own file. Both assume that Nyktus listens on the loopback address of the same host, which is the default, and that the certificate and the key exist. Replace the host names and the paths.
 
-The console, in `/etc/nginx/conf.d/nyktus.conf` on the internal host. The `map` selects the six sign-in routes, so that the rate limit counts nothing else. The web console reads `GET /api/v1/session` to learn whether you are signed in, so that route must not be limited:
+The console, in `/etc/nginx/conf.d/nyktus.conf` on the internal host. The `map` selects the seven routes, so that the rate limit counts nothing else. The web console reads `GET /api/v1/session` to learn whether you are signed in, so that route must not be limited:
 
 ```nginx
 # Count only the sign-in routes, per client address. An empty key is not counted.
@@ -57,6 +59,7 @@ map "$request_method $uri" $signin_client {
     "GET /api/v1/oidc/callback"            $binary_remote_addr;
     "POST /api/v1/activation"              $binary_remote_addr;
     "POST /api/v1/password-reset"          $binary_remote_addr;
+    "POST /api/v1/setup"                   $binary_remote_addr;
 }
 
 limit_req_zone $signin_client zone=nyktus_signin:10m rate=10r/m;

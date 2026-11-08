@@ -1,11 +1,11 @@
 ---
 title: Deploy
-description: Build Nyktus, give each server role its own settings, and run the roles on separate hosts under systemd or Compose.
+description: Get and verify a release of Nyktus, give each server role its own settings, and run the roles on separate hosts under systemd or Compose.
 ---
 
 # Deploy
 
-This page takes you from the source code to an installation that runs each server role on the host where it belongs. Afterwards your team reaches the console, the internet reaches the trigger, and the roles start again after a reboot. Read [Architecture](/getting-started/architecture) first if you have not decided which role runs where.
+This page takes you from a release to an installation that runs each server role on the host where it belongs. Afterwards your team reaches the console, the internet reaches the trigger, and the roles start again after a reboot. Read [Architecture](/getting-started/architecture) first if you have not decided which role runs where.
 
 ## What you need
 
@@ -13,20 +13,43 @@ This page takes you from the source code to an installation that runs each serve
 - **PostgreSQL 16 or later**, set up as [Database setup](/operate/database) describes, reachable from both hosts. Allow the connections of the internet-facing host for its own logins only, and over TLS.
 - **Two host names** with certificates: one for the console and one for the trigger. They must differ, and the trigger name should name neither Nyktus nor a decoy, see [the address of the trigger](/guides/honeytokens#the-address-of-the-trigger).
 - **A reverse proxy** on each of these hosts, see [Reverse proxy](/operate/reverse-proxy).
-- **Go 1.26 and Node.js 24** on a build machine. The servers need neither.
 
-## Build
+## Get the release
 
-Version 0.1 is distributed as source code. Build the release you want on any machine:
+Each release publishes an archive per platform and a signed image. The archives hold `nyktus` (one binary for all roles, with the web console embedded), the licence and a notice. The sensor is released apart, see [the sensor](/guides/sensor#install).
+
+Download the archive for your platform, the checksums and their signature. Version `0.1.0` for Linux on x86-64:
 
 ```sh
-git clone https://github.com/Nyktus/nyktus.git
-cd nyktus
-git checkout v0.1.0
-make build
+base=https://github.com/Nyktus/nyktus/releases/download/v0.1.0
+curl -fLO "$base/nyktus_0.1.0_linux_amd64.tar.gz"
+curl -fLO "$base/checksums.txt"
+curl -fLO "$base/checksums.txt.sigstore.json"
 ```
 
-`bin/nyktus` is one binary for all roles, with the web console embedded. `bin/nyktus-sensor` is the [sensor](/guides/sensor). Copy `bin/nyktus` to `/usr/local/bin/nyktus` on every server host.
+The release workflow signs `checksums.txt` with [cosign](https://docs.sigstore.dev/cosign/) and no key of its own: the certificate in the signature names the workflow and the tag that produced the file, and the signature is recorded in a public log. Check both before you run anything:
+
+```sh
+cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github.com/Nyktus/nyktus/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+sha256sum --check --ignore-missing checksums.txt
+```
+
+The first command prints `Verified OK`, the second `nyktus_0.1.0_linux_amd64.tar.gz: OK`. If either fails, do not use the file. Then unpack the archive and copy `nyktus` to `/usr/local/bin/nyktus` on every server host:
+
+```sh
+tar -xzf nyktus_0.1.0_linux_amd64.tar.gz nyktus
+./nyktus version
+```
+
+```text
+v0.1.0
+```
+
+Archives exist for Linux on x86-64 and arm64 and for macOS on arm64. Each has an SBOM (`*.sbom.spdx.json`) that lists the Go modules in the binary.
+
+To build from the source instead, you need Go 1.26 and Node.js 24 on a build machine. Check out the tag and run `make build`, which writes `bin/nyktus` and `bin/nyktus-sensor`.
 
 ## Give each role its own settings
 
@@ -130,71 +153,26 @@ The logs go to the journal: `journalctl --unit nyktus@console`. The console prin
 
 ## Run with Compose
 
-Version 0.1 ships no container image. Build one from the source with the Dockerfile of the development environment, on the build machine, and make it available to the hosts:
+The images are `ghcr.io/nyktus/nyktus` for the server and `ghcr.io/nyktus/nyktus-sensor` for the sensor, for Linux on x86-64 and arm64. They hold the binary of the archive and nothing else: no shell, no package manager, and a user without root. Check the signature of an image like that of the archive; the identity is the same:
 
 ```sh
-docker build --file deploy/dev/Dockerfile --tag nyktus:0.1 .
+cosign verify ghcr.io/nyktus/nyktus:0.1.0 \
+  --certificate-identity-regexp '^https://github.com/Nyktus/nyktus/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
-The file below runs the roles in read-only containers without capabilities. The profiles select the roles of a host: `internal` for the console and the worker, `edge` for the trigger and the DNS role. Run each profile on its own host, with its own environment files. The ports are published on the loopback address, for the reverse proxy on the host. Only the DNS role is published on the public port 53.
+The directory `deploy/compose` of the source holds a reference installation for one host: PostgreSQL, the migrations, every role, and an nginx container that serves the console over HTTPS. It is the starting point for an installation with real data, which `deploy/dev` is not. Its README is the guide:
 
-```yaml
-name: nyktus
+- Every setting comes from `.env`. The file lists them, with a command for each secret, and Compose refuses to start while a required one is empty.
+- The roles run in read-only containers without capabilities, as a user without root, and each connects to the database with its own login. The worker is a container of its own.
+- The console is reachable through the proxy only, on the address of `NYKTUS_CONSOLE_BIND`: use an internal address, because the console does not belong on the internet.
+- The trigger publishes its port on the loopback address for a proxy of your own. The profile `trigger-proxy` adds an nginx for it that logs no request and answers like the trigger where it answers itself. The profile `dns` adds the DNS role on port 53.
+- The certificates are files you provide. The reference starts no certificate client.
+- An upgrade changes `NYKTUS_VERSION`, then `docker compose pull` and `docker compose up --detach`; the migrations run first.
 
-x-nyktus: &nyktus
-  image: nyktus:0.1
-  restart: unless-stopped
-  read_only: true
-  cap_drop: [ALL]
-  security_opt: ["no-new-privileges:true"]
+Compose reads all services, also those of a profile you do not use, so leave the example values of the DNS and trigger-proxy settings in `.env` if you do not use them.
 
-services:
-  # Applies the migrations: docker compose --profile migrate run --rm migrate
-  migrate:
-    <<: *nyktus
-    profiles: [migrate]
-    restart: "no"
-    command: [migrate]
-    env_file: migrate.env
-
-  # Internal host: docker compose --profile internal up --detach
-  console:
-    <<: *nyktus
-    profiles: [internal]
-    command: [serve, --roles=console]
-    env_file: console.env
-    ports:
-      - 127.0.0.1:8080:8080
-
-  worker:
-    <<: *nyktus
-    profiles: [internal]
-    command: [serve, --roles=worker]
-    env_file: worker.env
-
-  # Host that the internet can reach: docker compose --profile edge up --detach
-  trigger:
-    <<: *nyktus
-    profiles: [edge]
-    command: [serve, --roles=trigger]
-    env_file: trigger.env
-    ports:
-      - 127.0.0.1:8081:8081
-
-  dns:
-    <<: *nyktus
-    profiles: [edge]
-    command: [serve, --roles=dns]
-    env_file: dns.env
-    ports:
-      - 53:8053/udp
-      - 53:8053/tcp
-```
-
-- **Environment files.** `console.env`, `worker.env`, `trigger.env` and `dns.env` are the files from above. `migrate.env` holds `NYKTUS_DATABASE_URL`, the URL of the owner, which only the migration uses.
-- **Quote a list of roles.** Each service here runs one role. If you run several roles in one process, write `"--roles=console,worker"` in quotes: in a YAML list, an unquoted `--roles=console,worker` is split at the comma, and the server stops with `unexpected arguments`.
-- **Listen on all addresses in the container.** Add `NYKTUS_CONSOLE_ADDR=0.0.0.0:8080` to `console.env`, `NYKTUS_TRIGGER_ADDR=0.0.0.0:8081` to `trigger.env` and `NYKTUS_DNS_ADDR=0.0.0.0:8053` to `dns.env`. The ports are still reachable from the host only, because the file publishes them on the loopback address. Put the address of the Docker network, such as `172.16.0.0/12`, into `NYKTUS_TRUSTED_PROXIES`, because the reverse proxy reaches the container from there.
-- **`env_file` keeps the secrets in the container's environment.** Anyone who may run `docker inspect` can read them. Keep the files readable by their administrator only, and restrict access to the Docker daemon.
+To run the roles on separate hosts, as this page describes, use the same images with the commands and settings of the sections above: `serve --roles=trigger` and the settings of `trigger.env`, in a container that publishes the port on the loopback address.
 
 ## Check the installation
 
