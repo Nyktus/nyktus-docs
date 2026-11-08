@@ -15,9 +15,9 @@ A honeytoken is a URL or host name that nobody has a reason to open or resolve. 
 | `web_image` | The URL is loaded as an image. | An image in a document, a mail or an HTML page, which the viewer loads when it opens it. |
 | `dns` | One of its host names is resolved. | A host in an SSH configuration, a connection string, a VPN profile or a script. See [DNS honeytokens](/guides/dns-honeytokens). |
 
-A QR code is a `web_url` shown as a QR code. The console shows the code when you create the honeytoken; to make your own, encode its `trigger_url`.
+A QR code is a `web_url` shown as a QR code. The page of the honeytoken in the console shows the code when you choose "Show QR code"; it stays hidden until then, because the URL of a honeytoken can be a secret. To make your own, encode its `trigger_url`.
 
-A `web_url` redirects the browser after the request, so that a click lands on a page instead of an error. You choose the target with `redirect_url`.
+A `web_url` redirects the browser after the request, so that a click lands on a page instead of an error. You choose the target with `redirect_url`. The redirect applies to a browser. A program that sends its data with `POST`, such as a log shipper, always gets an empty answer; see [Report with a POST](#report-with-a-post).
 
 The type cannot be changed later.
 
