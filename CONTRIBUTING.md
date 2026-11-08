@@ -18,3 +18,7 @@ Thank you for helping. The documentation is for people who run Nyktus or connect
 - Describe what changed for the reader, and whether the page states anything about security.
 
 The guidelines for writing are in [AGENTS.md](AGENTS.md); they apply to human authors as well.
+
+## Releases
+
+Merging a pull request does not publish the site. The release pull request does, see [DEPLOYMENT.md](DEPLOYMENT.md).
