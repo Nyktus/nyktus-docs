@@ -1,13 +1,13 @@
 name: Release
 
-# A tag "vX.Y.Z" releases the documentation: the workflow builds the site and uploads it to
+# A tag "nyktus-docs-vX.Y.Z" releases the documentation: the workflow builds the site and uploads it to
 # Hetzner Webhosting over SFTP. The release pull request creates the tag. A manual run builds
 # main or a tag and can list the changes of an upload without making them. See DEPLOYMENT.md
 # for the setup.
 on:
   push:
     tags:
-      - "v*"
+      - "nyktus-docs-v*"
   workflow_dispatch:
     inputs:
       dry_run:
@@ -26,23 +26,25 @@ concurrency:
 jobs:
   publish:
     # Only main and release tags are published, whoever starts the run.
-    if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
+    if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/nyktus-docs-v') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      SFTP_HOST: ${{ secrets.HETZNER_SFTP_HOST }}
-      SFTP_USER: ${{ secrets.HETZNER_SFTP_USER }}
-      SFTP_KEY: ${{ secrets.HETZNER_SFTP_KEY }}
-      SFTP_KNOWN_HOSTS: ${{ secrets.HETZNER_SFTP_KNOWN_HOSTS }}
-      # A variable, or a secret if you stored it as one.
-      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || secrets.DEPLOY_PATH }}
-      SFTP_PORT: ${{ vars.SFTP_PORT || '22' }}
-      DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+    # The settings of the upload go only to the two steps that read them, so that the packages
+    # that the build runs never see the deploy key.
     steps:
       # The values end up in a command line of lftp, so only plain characters pass. The site is
       # mirrored with deletion, and it shares its package with the landing page in the folder
       # above: a path outside a subfolder of public_html would delete that site.
       - name: Check the settings
+        env: &upload-settings
+          SFTP_HOST: ${{ secrets.HETZNER_SFTP_HOST }}
+          SFTP_USER: ${{ secrets.HETZNER_SFTP_USER }}
+          SFTP_KEY: ${{ secrets.HETZNER_SFTP_KEY }}
+          SFTP_KNOWN_HOSTS: ${{ secrets.HETZNER_SFTP_KNOWN_HOSTS }}
+          # A variable, or a secret if you stored it as one.
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || secrets.DEPLOY_PATH }}
+          SFTP_PORT: ${{ vars.SFTP_PORT || '22' }}
+          DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
         run: |
           missing=
           for name in SFTP_HOST SFTP_USER SFTP_KEY SFTP_KNOWN_HOSTS DEPLOY_PATH; do
@@ -67,7 +69,7 @@ jobs:
         env:
           TAG: ${{ github.ref_name }}
         run: |
-          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ ! "$TAG" =~ ^nyktus-docs-v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "::error::The tag $TAG is not a version of the documentation."
             exit 1
           fi
@@ -87,6 +89,7 @@ jobs:
       # whoever answers. .well-known belongs to the server and is neither uploaded nor deleted. The
       # .htaccess comes from src/public and is part of the site.
       - name: Upload
+        env: *upload-settings
         run: |
           umask 077
           trap 'rm -f "$RUNNER_TEMP/deploy_key" "$RUNNER_TEMP/known_hosts"' EXIT
