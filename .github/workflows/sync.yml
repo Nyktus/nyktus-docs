@@ -1,0 +1,90 @@
+name: Sync with the main repository
+
+# After a release of the server or the sensor, opens a pull request that moves the pin to it, so
+# that the versions, the API reference and the catalog of the site follow the release. Merging
+# the pull request starts a release of the documentation. See DEPLOYMENT.md.
+on:
+  schedule:
+    - cron: "23 5 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      # The token of the GitHub App, because what the default token creates starts no workflow:
+      # the checks would never run on the pull request.
+      - id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Nyktus/nyktus
+          ref: main
+          path: .main-repository
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+      # The script uses only the standard library of Node.js, so no package runs near the token.
+      - name: Move the pin to the newest release
+        id: pin
+        run: |
+          main=.main-repository
+          commit="$(git -C "$main" log -1 --format=%H origin/main -- .release-please-manifest.json)"
+          pin="$(node -p "require('./sync.json').ref")"
+          # A pin may be ahead of the release, when a page documents what is merged already.
+          if git -C "$main" merge-base --is-ancestor "$commit" "$pin"; then
+            echo "The pin ${pin:0:12} already contains the release commit ${commit:0:12}."
+            exit 0
+          fi
+          node scripts/sync.mjs "$main" --ref "$commit"
+          {
+            echo "changed=true"
+            echo "server=$(node -p "require('./$main/.release-please-manifest.json')['.']")"
+            echo "sensor=$(node -p "require('./$main/.release-please-manifest.json').sensor")"
+            echo "commit=$commit"
+          } >> "$GITHUB_OUTPUT"
+      - name: Open the pull request
+        if: ${{ steps.pin.outputs.changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+          SERVER: ${{ steps.pin.outputs.server }}
+          SENSOR: ${{ steps.pin.outputs.sensor }}
+          COMMIT: ${{ steps.pin.outputs.commit }}
+        run: |
+          bot="${APP_SLUG}[bot]"
+          id="$(gh api "users/${bot}" --jq .id)"
+          branch=sync/main-repository
+          title="docs: document Nyktus ${SERVER} and its sensor ${SENSOR}"
+          git config user.name "$bot"
+          git config user.email "${id}+${bot}@users.noreply.github.com"
+          gh auth setup-git
+          git switch --force-create "$branch"
+          git add sync.json data
+          git commit --message "$title"
+          git push --force origin "$branch"
+          if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[].number')" ]; then
+            gh pr create --base main --head "$branch" --title "$title" \
+              --body "Moves the pin to Nyktus/nyktus@${COMMIT}, the newest release of the server or the sensor."
+          else
+            gh pr edit "$branch" --title "$title"
+          fi

@@ -10,6 +10,10 @@ The upload mirrors the folder: files that are no longer in the build are deleted
 
 Docs-only changes release too. The version is that of the documentation and has nothing to do with the version of Nyktus. `feat` raises the minor version, everything else the patch version; to choose another version, end the message of the squash commit with `Release-As: 0.2.0`.
 
+## Releases of Nyktus
+
+Pages name the versions of the server and the sensor with a placeholder, which the build fills from `data/releases.json`, the copy of the release manifest of the main repository. Once a day, [sync.yml](.github/workflows/sync.yml) looks for a new release of either. It then opens a pull request that moves the pin in `sync.json` to the release commit, which also brings the API reference and the catalog of that release. Merging the pull request leads to the release pull request of the documentation as usual. Actions, "Sync with the main repository", Run workflow, does the same at once.
+
 ## One-time setup
 
 **The release pull request** needs a GitHub App token, because what the default token creates starts no workflow. The app of the main repository works: install it on this repository too (contents and pull requests: write), then store its client ID as the variable `RELEASE_APP_CLIENT_ID` and its private key as the secret `RELEASE_APP_PRIVATE_KEY`.
