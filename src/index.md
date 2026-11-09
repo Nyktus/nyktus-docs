@@ -13,7 +13,7 @@ hero:
       link: /getting-started/quickstart
 features:
   - title: Quickstart
-    details: "Run Nyktus on one machine, place a honeytoken and a honeypot, and receive your first alert."
+    details: "Run Nyktus on one machine, place a honeytoken and a honeypot, and see the incidents they raise."
     link: /getting-started/quickstart
     linkText: Try it out
   - title: Concepts

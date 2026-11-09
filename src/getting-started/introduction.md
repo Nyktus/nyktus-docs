@@ -41,5 +41,5 @@ An intruder who recognizes a decoy can also avoid it, so a decoy that looks like
 
 - [Concepts](/getting-started/concepts) defines the terms that every page uses.
 - [Architecture](/getting-started/architecture) shows the parts of Nyktus and where each one runs.
-- The [quickstart](/getting-started/quickstart) builds Nyktus and takes a honeytoken and a honeypot through to an incident and an alert.
+- The [quickstart](/getting-started/quickstart) runs the released containers and takes a honeytoken and a honeypot through to an incident.
 - [Deploy](/operate/deploy) sets up an installation that holds real data.
