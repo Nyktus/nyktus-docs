@@ -18,12 +18,12 @@ Pages name the versions of the server and the sensor with a placeholder, which t
 
 **The release pull request** needs a GitHub App token, because what the default token creates starts no workflow. The app of the main repository works: install it on this repository too (contents and pull requests: write), then store its client ID as the variable `RELEASE_APP_CLIENT_ID` and its private key as the secret `RELEASE_APP_PRIVATE_KEY`.
 
-**The upload** needs the secrets `HETZNER_SFTP_HOST`, `HETZNER_SFTP_USER`, `HETZNER_SFTP_KEY` (the private key of a pair that only the pipelines use) and `HETZNER_SFTP_KNOWN_HOSTS`, and `DEPLOY_PATH`, as a variable or a secret. The setup of the key and of the host key is the same as for the landing page; its `DEPLOYMENT.md` has the steps. In short, for the host key:
+**The upload** needs, in the environment `production` that only `main` and release tags reach, the secrets `HETZNER_SFTP_HOST`, `HETZNER_SFTP_USER`, `HETZNER_SFTP_KEY` (the private key of a pair that only the pipelines use) and `HETZNER_SFTP_KNOWN_HOSTS`, and `DEPLOY_PATH`, as a variable or a secret. The setup of the key and of the host key is the same as for the landing page; its `DEPLOYMENT.md` has the steps. In short, for the host key:
 
 ```sh
 ssh-keyscan -p 22 www123.your-server.de > known_hosts
 ssh-keygen -lf known_hosts
-gh secret set HETZNER_SFTP_KNOWN_HOSTS < known_hosts
+gh secret set HETZNER_SFTP_KNOWN_HOSTS --env production < known_hosts
 ```
 
 Hetzner publishes no fingerprints for web hosting. Read the keys from two networks and continue only if they match. If the SFTP port is not 22, set the variable `SFTP_PORT` and pass `-p` to `ssh-keyscan`.

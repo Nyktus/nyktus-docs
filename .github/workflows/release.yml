@@ -29,6 +29,8 @@ jobs:
     if: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/nyktus-docs-v') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # The secrets of the upload belong to this environment, which only main and release tags reach.
+    environment: production
     # The settings of the upload go only to the two steps that read them, so that the packages
     # that the build runs never see the deploy key.
     steps:
