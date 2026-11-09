@@ -55,7 +55,7 @@ Red teams, insiders and targeted intruders do this. Weigh the effort against who
 |---|---|
 | Telnet | The banner and the login prompt default to those of a Linux server, the same in every installation, so a scanner can look for them. A switch or a printer says something else: change both. |
 | SSH | The identification string defaults to a common OpenSSH, the same in every installation: change it to what your servers announce. The algorithms are those of the SSH library of the Go project, so a tool that compares them, such as `ssh-audit`, can tell the honeypot from the OpenSSH it names. A refused login comes at once, where OpenSSH makes a client wait. |
-| PostgreSQL | It asks for a password in clear text. A current server asks for a SCRAM password, which does not reveal its length. It offers no encryption. |
+| PostgreSQL | The refusal reports the source line of version 16, whatever the client expects. It offers TLS only with a certificate of yours. The salt of a user changes when the sensor restarts. |
 | LDAP | Every search, including the root of the directory, returns an empty result, and there is no vendor name or version. It offers no TLS. |
 
 - Give every SSH honeypot a host key of its own, created once. A key that changes would tell anyone that the server is a decoy, two honeypots that share a key are tied together, and the key of a real server would be known to anyone who captures the honeypot.
@@ -92,6 +92,6 @@ No measure makes a decoy invisible to an intruder who controls their own DNS and
 | looks up the domain | registration data, hosting, certificate | use a neutral domain; use a wildcard certificate |
 | reads a file with a DNS name | a name under your zone | use a neutral zone that fits the placement |
 | queries the zone | name servers, the same answer for every name | name the name servers neutrally; use a DNS role of its own for zones that must not be linked |
-| scans a honeypot | a default banner, library algorithms, a clear-text password request | change the banner; give each SSH honeypot its own host key |
+| scans a honeypot | a default banner, library algorithms | change the banner; give each SSH honeypot its own host key |
 | watches the egress of the sensor host | HTTPS requests to the trigger host every five minutes | use the neutral trigger address |
 | finds an example file | its name, dates, owner and place, and the names and passwords that every installation shares | change names and passwords; place it as the guide says; match its neighbors |
