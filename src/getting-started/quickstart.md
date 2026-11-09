@@ -25,7 +25,7 @@ cd nyktus
 make build
 ```
 
-`make build` builds the web console, then writes `bin/nyktus` and `bin/nyktus-sensor`. The sensor joins in step 9. To build a release instead of the current development state, check out its tag first, for example `git checkout v0.2.0`.
+`make build` builds the web console, then writes `bin/nyktus` and `bin/nyktus-sensor`. The sensor joins in step 9. To build a release instead of the current development state, check out its tag first, for example `git checkout v%%NYKTUS_VERSION%%`.
 
 ## 2. Start PostgreSQL
 

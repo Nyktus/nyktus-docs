@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: The Nyktus Authors
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { defineConfig } from 'vitepress'
 import { plateTheme } from './plate-theme'
@@ -9,6 +9,15 @@ import { loadSpec, tagPages } from '../scripts/openapi.mjs'
 
 // The reference pages are generated from the specification, so the sidebar lists its tags.
 const apiTags = tagPages(loadSpec())
+
+// The versions of the releases, from the copy of the manifest of the main repository. Pages name
+// them with a placeholder, so that moving the pin updates every command, also in code blocks, where
+// the expressions of Vue do not work. An unknown placeholder fails the build.
+const manifest = JSON.parse(readFileSync(new URL('../data/releases.json', import.meta.url), 'utf8'))
+const releaseVersions: Record<string, string> = {
+  NYKTUS_VERSION: manifest['.'],
+  NYKTUS_SENSOR_VERSION: manifest.sensor,
+}
 
 // The guides and the security page share one sidebar. The security page keeps its address, because
 // published URLs are permanent.
@@ -204,5 +213,13 @@ export default defineConfig({
   markdown: {
     lineNumbers: false,
     theme: plateTheme,
+    config: (md) => {
+      md.core.ruler.before('normalize', 'release-versions', (state) => {
+        state.src = state.src.replace(/%%([A-Z_]+)%%/g, (_, name) => {
+          if (!releaseVersions[name]) throw new Error(`unknown placeholder of a version: ${name}`)
+          return releaseVersions[name]
+        })
+      })
+    },
   },
 })
