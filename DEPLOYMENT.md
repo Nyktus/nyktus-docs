@@ -3,7 +3,7 @@
 docs.nyktus.org is published by a release, not by a merge. A change on `main` goes live only after the release pull request that [release-please](https://github.com/googleapis/release-please) keeps open has been merged:
 
 1. Every merge to `main` updates the release pull request, which holds the next version and the changelog ([release-please.yml](.github/workflows/release-please.yml)).
-2. Merging it creates the tag `vX.Y.Z` and a GitHub release.
+2. Merging it creates the tag `nyktus-docs-vX.Y.Z` and a GitHub release.
 3. The tag starts [release.yml](.github/workflows/release.yml). It checks that the tag is on `main`, runs `npm run build` and uploads `.vitepress/dist` to Hetzner Webhosting over SFTP.
 
 The upload mirrors the folder: files that are no longer in the build are deleted on the server, except `.well-known/`. The `.htaccess` comes from `src/public/` and switches on the clean URLs of the site, which Apache does not serve by itself.
