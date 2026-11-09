@@ -593,52 +593,6 @@ body {
   text-underline-offset: 0.22em;
 }
 
-/* Home page */
-
-.VPHome .VPHero .text {
-  max-width: 14ch;
-  font-size: clamp(2.6rem, 1.2rem + 5vw, 4.5rem);
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.04em;
-  color: var(--ink);
-  text-wrap: balance;
-}
-
-.VPHome .VPHero .tagline {
-  margin-top: 1.5rem;
-  max-width: 36rem;
-  font-size: 1.1875rem;
-  font-weight: 400;
-  line-height: 1.55;
-  color: var(--slate);
-}
-
-.VPHome .VPButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 3rem;
-  padding: 0 1.3rem;
-  line-height: 1;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-sans);
-  font-weight: 650;
-  transition:
-    background-color 180ms var(--ease-out),
-    border-color 180ms var(--ease-out),
-    box-shadow 180ms var(--ease-out),
-    transform 180ms var(--ease-out);
-}
-
-.VPHome .VPButton.brand {
-  box-shadow: var(--shadow-1);
-}
-
-.VPHome .VPButton.brand:hover {
-  transform: translateY(-1px);
-}
-
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -646,13 +600,8 @@ body {
 
   .VPSidebarItem .link,
   .VPNavBarSearchButton,
-  .VPDocFooter .pager-link,
-  .VPHome .VPButton {
+  .VPDocFooter .pager-link {
     transition: none;
-  }
-
-  .VPHome .VPButton.brand:hover {
-    transform: none;
   }
 }
 
@@ -669,7 +618,7 @@ body {
 /* The tiles of the home page: quiet cards that lead to the sections. */
 
 .VPHome .VPFeatures {
-  padding-top: 1rem;
+  padding-top: 3rem;
 }
 
 .VPHome .VPFeature {
