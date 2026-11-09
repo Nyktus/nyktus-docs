@@ -5,7 +5,7 @@ description: Set up the PostgreSQL database, the owner and the logins of the ser
 
 # Database setup
 
-Nyktus stores all state in PostgreSQL 16 or later. After this page you have a database with a login for each server role and the migrations applied, from one script and one command. To try Nyktus on one machine first, the [quickstart](/getting-started/quickstart) runs the same steps against a throwaway database.
+Nyktus stores all state in PostgreSQL 16 or later. After this page you have a database with a login for each server role and the migrations applied, from one script and one command. To try Nyktus on one machine first, the [quickstart](/getting-started/quickstart) runs the containers of a release with a throwaway database.
 
 ## What the script creates
 
