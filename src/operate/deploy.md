@@ -173,7 +173,7 @@ The directory `deploy/compose` of the source holds a reference installation for 
 - The console is reachable through the proxy only, on the address of `NYKTUS_CONSOLE_BIND`: use an internal address, because the console does not belong on the internet.
 - The trigger publishes its port on the loopback address for a proxy of your own, or on the address of `NYKTUS_TRIGGER_BIND` for an internal-only trigger. The profile `trigger-proxy` adds an nginx for it that logs no request and answers like the trigger where it answers itself. The profile `dns` adds the DNS role on port 53.
 - The certificates are files you provide. The reference starts no certificate client.
-- An upgrade changes `NYKTUS_VERSION`, then `docker compose pull` and `docker compose up --detach`; the migrations run first.
+- An upgrade changes `NYKTUS_VERSION`, then `docker compose pull` and `docker compose up --detach`; the migrations run first. Until version 1.0.0, a release can change the initial migration. `migrate` then stops with `applied migration has been modified`, and the database has to be created anew.
 
 ### Containers on separate hosts
 
