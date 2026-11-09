@@ -92,7 +92,9 @@ Every entry of `honeypots`:
 | `secret` or `secret_file` | one is required | The secret, or the file that holds it. |
 | `banner` | by service | What the service says first. See the services below. |
 | `login_prompt` | `login: ` | The prompt for the user name, up to 64 bytes of printable ASCII. Telnet only. |
-| `host_key_file` | required for `ssh` | The file with the private key of the server. A relative path is relative to the configuration file. |
+| `host_key_file` | required for `ssh` | The file with the Ed25519 private key of the server. A relative path is relative to the configuration file. |
+| `rsa_host_key_file` | none | A second host key, RSA with at least 2048 bits, for old clients. SSH only. |
+| `tls_cert_file`, `tls_key_file` | none | A certificate chain and its key, which lets a client use TLS. PostgreSQL only, always both. The key must be readable by the sensor alone. |
 
 ### Secrets in files
 
@@ -138,15 +140,17 @@ chown nyktus-sensor /etc/nyktus-sensor/ssh_host_key_7d2a51c4-3b8e-4f0a-9c6d-1e2f
 
 **Version and algorithms.** `banner` is the identification string the server sends first, without the line ending. The default is that of Ubuntu 22.04. Change it to what the servers in your network announce, such as `SSH-2.0-OpenSSH_9.2p1 Debian-2+deb12u3`. It starts with `SSH-2.0-`, then a software version without a space or a minus, and optionally a space and a comment, at most 253 bytes of printable ASCII.
 
-The honeypot offers the algorithms of the SSH library, not those of OpenSSH, and an Ed25519 host key only. A tool that compares the lists, such as `ssh-audit`, can tell it from the OpenSSH it names. The library offers no broken or deprecated algorithm, so a client that knows nothing newer than SHA-1, CBC or 1024-bit groups, such as old embedded devices and some bots, fails the key exchange and shows up as a connection with its version.
+The honeypot offers the algorithms of the SSH library, not those of OpenSSH, and adds the old ones that the library leaves out by default: SHA-1, CBC and the 1024-bit group. A client that knows nothing newer, such as an old embedded device or a bot, still reaches the login and is reported with what it tries. A tool that compares the lists, such as `ssh-audit`, can tell the honeypot from the OpenSSH it names.
+
+The host key is an Ed25519 key. To serve a client that knows only RSA, add a second key with `rsa_host_key_file`, created once like the first with `ssh-keygen -t rsa -b 3072 -N '' -f <file>`. Without it, such a client fails the key exchange and is reported as a connection, with the version it announced.
 
 The library starts goroutines of its own, and a panic in one of them ends the process. Run the sensor so that the service manager restarts it, as the unit below does.
 
 ### PostgreSQL
 
-The honeypot speaks the protocol up to the login and refuses it. It records the user, the database the client asked for and its `application_name`, asks for the password in clear text, counts its length and answers with `28P01`, `password authentication failed for user "..."`, as a server does for an unknown user. The connection then ends, so a session holds one login. It reads no query and runs no SQL.
+The honeypot speaks the protocol up to the login and refuses it. It records the user, the database the client asked for and its `application_name`, plays a SCRAM exchange as a current server does, and answers with `28P01`, `password authentication failed for user "..."`. The connection then ends, so a session holds one login. It reads no query and runs no SQL. SCRAM never shows the password, so a report of this service holds neither the password nor its length.
 
-It offers no encryption: a request for TLS is answered with `N`, and the client goes on in clear text, as `psql` does with `sslmode=prefer`. A client that insists on TLS goes no further and is reported as a connection. A current server asks for a SCRAM password, which does not reveal its length, so a client sees a request that a current server would not send. `banner` has no effect and is refused.
+Without a certificate, a request for TLS is answered with `N`, and the client goes on in clear text, as `psql` does with `sslmode=prefer`. A client that insists on TLS goes no further and is reported as a connection. With `tls_cert_file` and `tls_key_file`, such a client reaches the login as well. Use a certificate that fits the host; the sensor never makes one of its own, because it would identify the honeypot. `banner` has no effect and is refused.
 
 ### LDAP
 
