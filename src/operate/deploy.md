@@ -29,11 +29,11 @@ DNS honeytokens need the DNS role on a host that the resolvers of the internet r
 
 Skip this section if you run only containers. Each release publishes an archive per platform for Linux on x86-64 and arm64 and for macOS on arm64. The archive holds `nyktus`, one binary for all roles with the web console embedded, the licence and a notice, and has an SBOM (`*.sbom.spdx.json`) that lists the Go modules in the binary. The sensor is released apart, see [the sensor](/guides/sensor#install).
 
-Download the archive for your platform, the checksums and their signature. Version `0.1.0` for Linux on x86-64:
+Download the archive for your platform, the checksums and their signature. Version `%%NYKTUS_VERSION%%` for Linux on x86-64:
 
 ```sh
-base=https://github.com/Nyktus/nyktus/releases/download/v0.1.0
-curl -fLO "$base/nyktus_0.1.0_linux_amd64.tar.gz"
+base=https://github.com/Nyktus/nyktus/releases/download/v%%NYKTUS_VERSION%%
+curl -fLO "$base/nyktus_%%NYKTUS_VERSION%%_linux_amd64.tar.gz"
 curl -fLO "$base/checksums.txt"
 curl -fLO "$base/checksums.txt.sigstore.json"
 ```
@@ -47,16 +47,16 @@ cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json \
 sha256sum --check --ignore-missing checksums.txt
 ```
 
-The first command prints `Verified OK`, the second `nyktus_0.1.0_linux_amd64.tar.gz: OK`. If either fails, do not use the file. Then unpack the archive and copy `nyktus` to `/usr/local/bin/nyktus` on every server host:
+The first command prints `Verified OK`, the second `nyktus_%%NYKTUS_VERSION%%_linux_amd64.tar.gz: OK`. If either fails, do not use the file. Then unpack the archive and copy `nyktus` to `/usr/local/bin/nyktus` on every server host:
 
 ```sh
-tar -xzf nyktus_0.1.0_linux_amd64.tar.gz nyktus
+tar -xzf nyktus_%%NYKTUS_VERSION%%_linux_amd64.tar.gz nyktus
 sudo install -m 0755 nyktus /usr/local/bin/nyktus
 nyktus version
 ```
 
 ```text
-v0.1.0
+v%%NYKTUS_VERSION%%
 ```
 
 To build from the source instead, you need Go 1.26 and Node.js 24. Check out the tag and run `make build`, which writes `bin/nyktus` and `bin/nyktus-sensor`.
@@ -161,7 +161,7 @@ The logs go to the journal: `journalctl --unit nyktus@console`. The console prin
 The images are `ghcr.io/nyktus/nyktus` for the server and `ghcr.io/nyktus/nyktus-sensor` for the sensor, for Linux on x86-64 and arm64. They hold the binary of the archive and nothing else: no shell, no package manager, and a user without root. Check the signature of an image like that of the archive; the identity is the same:
 
 ```sh
-cosign verify ghcr.io/nyktus/nyktus:0.1.0 \
+cosign verify ghcr.io/nyktus/nyktus:%%NYKTUS_VERSION%% \
   --certificate-identity-regexp '^https://github.com/Nyktus/nyktus/\.github/workflows/release\.yml@refs/tags/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -185,13 +185,13 @@ docker run --detach --name nyktus-trigger --restart unless-stopped \
   --env-file /etc/nyktus/trigger.env --env-file /etc/nyktus/trigger.db.env \
   --env NYKTUS_TRIGGER_ADDR=0.0.0.0:8081 \
   --publish 127.0.0.1:8081:8081 \
-  ghcr.io/nyktus/nyktus:0.1.0 serve --roles=trigger
+  ghcr.io/nyktus/nyktus:%%NYKTUS_VERSION%% serve --roles=trigger
 ```
 
 For the DNS role, use `serve --roles=dns`, `NYKTUS_DNS_ADDR=0.0.0.0:8053` and `--publish 53:8053/udp --publish 53:8053/tcp`. Without the binary on the host, apply the migrations with the image and the file of the owner:
 
 ```sh
-docker run --rm --env-file nyktus-database/owner.db.env ghcr.io/nyktus/nyktus:0.1.0 migrate
+docker run --rm --env-file nyktus-database/owner.db.env ghcr.io/nyktus/nyktus:%%NYKTUS_VERSION%% migrate
 ```
 
 ## Check the installation

@@ -41,6 +41,7 @@ Nyktus is the source of truth for its behavior. Read the code, the OpenAPI speci
 - `api/openapi.yaml` is the only source for the endpoints of the API. Pages link to the reference and do not repeat it.
 - The deception catalog reference is generated from the published catalog file. Do not write it by hand.
 - The copies in `data/` come from the main repository at the commit that `sync.json` pins. Update them with `npm run sync -- <checkout>`, optionally with `--ref <revision>` to move the pin; the commit must be on `origin/main` of the checkout. Do not edit a copy: the build fails when it differs from its recorded hash. An error in the specification is fixed in the main repository.
+- A page names the current release with `%%NYKTUS_VERSION%%` and `%%NYKTUS_SENSOR_VERSION%%`, also in code blocks. The build replaces them with the versions in `data/releases.json`, the copy of the release manifest of the main repository.
 - A description in the API reference is the text of the specification. To improve it, change the specification there, not the generator here.
 
 ## Writing rules

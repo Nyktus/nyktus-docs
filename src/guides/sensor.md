@@ -21,21 +21,21 @@ The sensor `nyktus-sensor` runs your [honeypots](/guides/honeypots) inside the n
 The sensor is released apart from the server, under its own tag `sensor/vX.Y.Z`. It is one static binary that you may rename, with a YAML parser and the SSH library of the Go project as its only dependencies. Download the archive for the host, the checksums and their signature, and check them as [Deploy](/operate/deploy#get-the-release) shows for the server. The identity of the signature ends with `@refs/tags/sensor/v` instead of `@refs/tags/v`:
 
 ```sh
-base=https://github.com/Nyktus/nyktus/releases/download/sensor/v0.1.0
-curl -fLO "$base/nyktus-sensor_0.1.0_linux_amd64.tar.gz"
+base=https://github.com/Nyktus/nyktus/releases/download/sensor/v%%NYKTUS_SENSOR_VERSION%%
+curl -fLO "$base/nyktus-sensor_%%NYKTUS_SENSOR_VERSION%%_linux_amd64.tar.gz"
 curl -fLO "$base/checksums.txt"
 curl -fLO "$base/checksums.txt.sigstore.json"
 cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json \
   --certificate-identity-regexp '^https://github.com/Nyktus/nyktus/\.github/workflows/release\.yml@refs/tags/sensor/v' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 sha256sum --check --ignore-missing checksums.txt
-tar -xzf nyktus-sensor_0.1.0_linux_amd64.tar.gz nyktus-sensor
+tar -xzf nyktus-sensor_%%NYKTUS_SENSOR_VERSION%%_linux_amd64.tar.gz nyktus-sensor
 ```
 
 Archives exist for Linux on x86-64 and arm64 and for macOS on arm64. `nyktus-sensor version` prints the version, which the sensor also sends with every heartbeat:
 
 ```text
-0.1.0
+%%NYKTUS_SENSOR_VERSION%%
 ```
 
 To build the sensor from the source instead, run `make build`, which writes `bin/nyktus-sensor` next to `bin/nyktus`. A build from a checkout reports `devel` as its version, because the toolchain does not read the tag of a module in a subdirectory.
