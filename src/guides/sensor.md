@@ -10,7 +10,7 @@ The sensor `nyktus-sensor` runs your [honeypots](/guides/honeypots) inside the n
 ## What it does and does not do
 
 - It runs as an ordinary user and needs no privilege except a port below 1024, if you choose one.
-- It never executes, interprets or passes on what an attacker sends. A Telnet, SSH or PostgreSQL honeypot reads a user name and a password or a public key, counts them and refuses them. An LDAP honeypot reads a bind and a search and answers the search with nothing. There is no shell, file, command, SQL, directory entry or forwarded port.
+- It never executes, interprets or passes on what an attacker sends. A Telnet, SSH or PostgreSQL honeypot reads a user name and a password or a public key, counts them and refuses them. An LDAP honeypot reads a bind and a search and answers the search with nothing. An MCP honeypot answers a tool call with a fixed text from its configuration. There is no shell, file, command, SQL, directory entry or forwarded port.
 - It keeps no password. It reports the length, and of a public key the fingerprint.
 - It limits everything an attacker can use up: connections, bytes, time and logins.
 - It reads no environment variables for its configuration, loads nothing from the internet and sends nothing anywhere except the reports to your trigger.
@@ -40,7 +40,7 @@ Archives exist for Linux on x86-64 and arm64 and for macOS on arm64. `nyktus-sen
 
 To build the sensor from the source instead, run `make build`, which writes `bin/nyktus-sensor` next to `bin/nyktus`. A build from a checkout reports `devel` as its version, because the toolchain does not read the tag of a module in a subdirectory.
 
-Update the server before the sensors. The server refuses a report of a version it does not know.
+Update the server before the sensors. The server refuses a report of a version it does not know, and a sensor that is newer than its server shows its honeypots as `offline`.
 
 ## Set it up
 
@@ -87,14 +87,15 @@ Every entry of `honeypots`:
 | Key | Default | Description |
 |---|---|---|
 | `id` | required | The identifier of the honeypot in the console. The sensor logs it. |
-| `service` | required | `telnet`, `ssh`, `postgres` or `ldap`. |
+| `service` | required | `telnet`, `ssh`, `postgres`, `ldap` or `mcp`. |
 | `listen` | required | `host:port` or `:port`. An empty host takes every address of both families. `0.0.0.0` takes IPv4 only. Entries must not conflict. |
 | `secret` or `secret_file` | one is required | The secret, or the file that holds it. |
 | `banner` | by service | What the service says first. See the services below. |
 | `login_prompt` | `login: ` | The prompt for the user name, up to 64 bytes of printable ASCII. Telnet only. |
 | `host_key_file` | required for `ssh` | The file with the Ed25519 private key of the server. A relative path is relative to the configuration file. |
 | `rsa_host_key_file` | none | A second host key, RSA with at least 2048 bits, for old clients. SSH only. |
-| `tls_cert_file`, `tls_key_file` | none | A certificate chain and its key, which lets a client use TLS. PostgreSQL only, always both. The key must be readable by the sensor alone. |
+| `tls_cert_file`, `tls_key_file` | none | A certificate chain and its key, which lets a client use TLS. PostgreSQL and MCP only, always both. The key must be readable by the sensor alone. |
+| `mcp` | required for `mcp` | What the honeypot presents, see [MCP](#mcp). MCP only. |
 
 ### Secrets in files
 
@@ -158,6 +159,90 @@ The honeypot speaks the part of LDAP that a scanner or a tool that maps a domain
 
 A bind with a name or a password fails with `invalidCredentials` and counts as a login. An anonymous bind succeeds, so that a client goes on to its search, and is not recorded as a login. The sixth refused bind is the last. There is no LDAPS and no StartTLS, and `banner` has no effect and is refused.
 
+### MCP
+
+The honeypot emulates a server of the Model Context Protocol (MCP), revision `2026-07-28`, over Streamable HTTP. It answers `server/discover`, `tools/list` and `tools/call`, always with a single JSON response. It offers no resources, no prompts and no stream, and `GET` and `DELETE` receive `405`.
+
+**Nothing is built in.** The entry of the console is a frame with empty values, and the sensor does not start until you fill them in, because what every installation shared would identify the honeypot. A value that is missing is named by `nyktus-sensor check`:
+
+```text
+invalid configuration:
+honeypots[0].mcp.server_name: required, at most 128 bytes
+```
+
+The description of a tool is the actual bait: an AI agent decides by its text alone whether and how to call the tool. Write what a tool of your organization would say. A tool is an entry with fixed answers, and a page can point to further honeypots:
+
+```yaml
+- id: "7d2a51c4-3b8e-4f0a-9c6d-1e2f3a4b5c6d"
+  service: "mcp"
+  listen: ":8080"
+  secret: "<the secret of the honeypot>"
+  mcp:
+    path: "/mcp"
+    server_name: "acme-wiki"
+    server_version: "3.1.4"
+    instructions: "The internal wiki of the infrastructure team."
+    tools:
+      - name: "search_runbooks"
+        description: "Search the operations runbooks by keyword. Returns the id and title of each match."
+        arguments:
+          - {name: "query", type: "string", description: "The search term", required: true}
+        response: "1002 Emergency handbook\n1003 VPN access"
+      - name: "get_page"
+        description: "Read a runbook by its id."
+        arguments:
+          - {name: "page_id", type: "string", description: "The id of the runbook", required: true}
+        select_by: "page_id"
+        responses:
+          "1002": "# Emergency handbook\nJump host: ssh admin@192.0.2.15"
+          "1003": "# VPN access\nGateway: vpn.example.net"
+        response: "Page not found."
+      - name: "reset_password"
+        description: "Reset the password of an account."
+        response: "Access denied."
+        is_error: true
+```
+
+| Key | Default | Description |
+|---|---|---|
+| `path` | required | The path of the endpoint, at most 128 bytes. Other paths receive `404`. |
+| `server_name`, `server_version` | required | What the server calls itself, at most 128 and 64 bytes. |
+| `instructions` | none | Guidance for an AI agent, at most 4 KiB. |
+| `tools` | required | 1 to 16 tools, listed in this order. |
+| `tools[].name` | required | At most 64 letters, digits, `_`, `.` or `-`, unique. |
+| `tools[].description` | required | At most 2 KiB. |
+| `tools[].arguments` | none | At most 8, each with `name`, `type` (`string`, `integer` or `boolean`), and optionally `description` and `required`. |
+| `tools[].response` | required | The answer, at most 16 KiB. With `select_by`, the answer when no page matches. |
+| `tools[].select_by` | none | An argument of the type `string` or `integer` whose exact value selects one of `responses`. |
+| `tools[].responses` | none | Up to 32 pages by value, each at most 16 KiB. Only with `select_by`. |
+| `tools[].is_error` | `false` | Marks the answer as a failure of the tool, such as a refusal. |
+
+`banner` has no effect and is refused. With `tls_cert_file` and `tls_key_file` the port speaks TLS only and offers HTTP/1.1. Use a certificate that fits the host; the sensor never makes one of its own.
+
+**What a client sends.** A client must send the headers of the revision, `MCP-Protocol-Version` and `Mcp-Method`, and for a call `Mcp-Name`, besides `Host`, and the protocol version in `_meta`. A request that lacks one, or whose version differs from the header, is refused with `400`. A call that is refused for this reason still counts and shows the tool that it asked for, so that a client that does not know the headers is not lost; a call that names another revision does not count. To check a honeypot, call a tool from a host of your own. The call raises an event like any other:
+
+```sh
+curl -si http://192.0.2.20:8080/mcp \
+  -H 'MCP-Protocol-Version: 2026-07-28' -H 'Mcp-Method: tools/call' -H 'Mcp-Name: get_page' \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_page","arguments":{"page_id":"1002"},"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}}}'
+```
+
+```text
+HTTP/1.1 200 OK
+Date: Mon, 09 Nov 2026 21:34:07 GMT
+Content-Type: application/json
+Content-Length: 236
+
+{"jsonrpc":"2.0","id":1,"result":{"resultType":"complete","content":[{"type":"text","text":"# Emergency handbook\nJump host: ssh admin@192.0.2.15"}],"_meta":{"io.modelcontextprotocol/serverInfo":{"name":"acme-wiki","version":"3.1.4"}}}}
+```
+
+A client of an older revision, up to `2025-11-25`, is refused with `400` and an error that names `2026-07-28`, and appears as a `connection`. A request with an `Origin` header receives `403`: a browser is never a client of this server, so a web page cannot drive it. The honeypot asks for no login. It reads the header `Authorization` and neither stores nor counts it.
+
+**A session is a source, not a connection.** The protocol has no identifier of a session, and many clients close their connection while the model thinks. All requests of one source, an IPv4 address or an IPv6 network of /64, are therefore one session, which ends after about a minute of silence, checked every five seconds, and within two minutes at the latest. Its duration is the time from its first to its last request. Only then is it reported, so **the alert can come up to two minutes after the call**. Two attackers behind one address become one event. Calling a tool that does not exist counts as a call and shows what the caller wanted.
+
+**The arguments of a tool call** are what the attacker or their AI agent wrote. They can hold personal data and instructions addressed to whatever reads them, see [What an event records](/guides/honeypots#what-an-event-records).
+
 ## Limits
 
 The limits are fixed. They bound what an attacker can use up and are not settings, so that a configuration cannot lift them by mistake.
@@ -166,13 +251,16 @@ The limits are fixed. They bound what an attacker can use up and are not setting
 |---|---|
 | Open connections of a honeypot | 128. Further connections are closed at once. |
 | Open connections from one source | 8, where a source is an IPv4 address or an IPv6 network of /64. |
-| Duration of a session | 2 minutes. The sensor closes the connection and reports the session. |
+| Duration of a session | 2 minutes. The sensor closes the connection and reports the session. A session of an MCP honeypot spans the connections of its source, see [MCP](#mcp). |
 | Silence | 30 seconds without a byte from the client, 10 seconds for a client that does not read. |
 | Data from one client | 16 KiB for the whole connection. |
 | Logins of a session | 6, passwords and offered SSH keys together. A PostgreSQL session holds one. |
-| Kept of what the client sent | User name 256 bytes, SSH client version 128 bytes, PostgreSQL database and application 64 bytes each, LDAP base and filter 256 bytes each. Nothing of a password except its length. |
+| Requests over HTTP (MCP) | Headers 4 KiB, body 8 KiB, 16 requests and 256 KiB of answers per connection, within the 16 KiB that a client may send in all: a connection that sends more is closed without an answer. HTTP/1.1 only, without chunked bodies, and every request needs a `Host` header. |
+| Open sessions of an MCP honeypot | 128. A further source takes the place of the oldest one that has only connected. If every place holds a client, it is answered but not recorded, and counted in the log. |
+| Tool calls of a session | The first 6. |
+| Kept of what the client sent | User name 256 bytes, SSH or MCP client version 128 bytes, PostgreSQL database and application 64 bytes each, LDAP base and filter 256 bytes each, name of a tool 128 bytes and its arguments 2048 bytes. Nothing of a password except its length. |
 
-The sensor keeps no table of sources beyond the open connections, so a flood from many addresses costs memory in proportion to the connections it holds, at most 128.
+Apart from the sessions of an MCP honeypot, the sensor keeps no table of sources beyond the open connections, so a flood from many addresses costs memory in proportion to what it holds, at most 128 entries of each kind for a honeypot.
 
 ## How reports are delivered
 

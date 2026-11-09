@@ -32,7 +32,7 @@ Nyktus refuses to start outside development when a login has more privileges tha
 
 ## The sensor
 
-The sensor runs the honeypots. It listens inside the network you monitor, answers like SSH, Telnet, PostgreSQL or LDAP, offers nothing behind the login, and reports each session to the trigger with a `POST` that carries the secret of the honeypot. It needs no inbound connection from Nyktus and loads nothing from the internet.
+The sensor runs the honeypots. It listens inside the network you monitor, answers like SSH, Telnet, PostgreSQL, LDAP or MCP, offers nothing behind the login, and reports each session to the trigger with a `POST` that carries the secret of the honeypot. It needs no inbound connection from Nyktus and loads nothing from the internet.
 
 Install the sensor on a host that has no other purpose, in the segment where an intruder who moves through the network would look.
 
