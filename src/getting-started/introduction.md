@@ -22,7 +22,7 @@ So the alerts are few, and each one deserves attention. That suits a team withou
 | Part | What it is | It fires when |
 |---|---|---|
 | Honeytoken | A URL, an image, a QR code or a DNS name. | It is requested or resolved. |
-| Honeypot | A network service that a sensor emulates inside your network: SSH, Telnet, PostgreSQL or LDAP. | Someone connects to it. The sensor reports the session when it ends. |
+| Honeypot | A network service that a sensor emulates inside your network: SSH, Telnet, PostgreSQL, LDAP or MCP. | Someone connects to it. The sensor reports the session when it ends. |
 | Scenario | Honeytokens and honeypots that tell one story, such as a stolen finance backup. | One of its parts fires. |
 
 You do not have to invent these. The deception catalog holds ready-made guides: applying one creates a scenario, and if you ask for it the honeytokens and honeypots that the guide needs, and its example files show what to place. Every guide is mapped to MITRE ATT&CK techniques, and its guide follows the MITRE Engage approach to planning deception.

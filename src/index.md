@@ -19,7 +19,7 @@ features:
     link: /guides/honeytokens
     linkText: Place a honeytoken
   - title: Honeypots
-    details: "Emulated SSH, Telnet, PostgreSQL and LDAP services that the sensor runs inside your network."
+    details: "Emulated SSH, Telnet, PostgreSQL, LDAP and MCP services that the sensor runs inside your network."
     link: /guides/honeypots
     linkText: Set up a honeypot
   - title: Deception catalog
