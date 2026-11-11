@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.1](https://github.com/Nyktus/nyktus-docs/compare/nyktus-docs-v0.2.0...nyktus-docs-v0.2.1) (2026-11-11)
+
+
+### Documentation
+
+* document Nyktus 0.3.0 and its sensor 0.2.0 ([#41](https://github.com/Nyktus/nyktus-docs/issues/41)) ([3f266f5](https://github.com/Nyktus/nyktus-docs/commit/3f266f58254febdb0f813cfb5ce17c91ab1524e3))
+* **home:** show only the tiles on the home page ([#33](https://github.com/Nyktus/nyktus-docs/issues/33)) ([33ae9fb](https://github.com/Nyktus/nyktus-docs/commit/33ae9fb46511b868eb66038d5a4320403ba377fa))
+* **quickstart:** run the released containers with Docker Compose ([#35](https://github.com/Nyktus/nyktus-docs/issues/35)) ([8b761ec](https://github.com/Nyktus/nyktus-docs/commit/8b761ec57079335301bd614f92c743de032f9bbd))
+* **sensor:** describe old SSH clients, SCRAM and TLS for PostgreSQL ([#39](https://github.com/Nyktus/nyktus-docs/issues/39)) ([6538093](https://github.com/Nyktus/nyktus-docs/commit/6538093b5e1f2693773a3d43e92def0da290044c))
+* **sensor:** describe the MCP honeypot ([#40](https://github.com/Nyktus/nyktus-docs/issues/40)) ([a09e7a7](https://github.com/Nyktus/nyktus-docs/commit/a09e7a7a681aea6abad7a3fb3e0e00aaf2129f9d))
+* state what an upgrade can require and enable HSTS ([#38](https://github.com/Nyktus/nyktus-docs/issues/38)) ([cc242be](https://github.com/Nyktus/nyktus-docs/commit/cc242bea57f44e8a0c90b94c8259b762dbde5221))
+* take the versions of the releases from the main repository ([#32](https://github.com/Nyktus/nyktus-docs/issues/32)) ([ed0b297](https://github.com/Nyktus/nyktus-docs/commit/ed0b297b1833f1b3abda9e512114924d22908600))
+
 ## [0.2.0](https://github.com/Nyktus/nyktus-docs/compare/nyktus-docs-v0.1.0...nyktus-docs-v0.2.0) (2026-11-08)
 
 
