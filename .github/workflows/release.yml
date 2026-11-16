@@ -75,6 +75,12 @@ jobs:
             echo "::error::The tag $TAG is not a version of the documentation."
             exit 1
           fi
+          # The documentation carries the version of the Nyktus release that it documents.
+          server="$(jq -r '.["."]' data/releases.json)"
+          if [ "$TAG" != "nyktus-docs-v$server" ]; then
+            echo "::error::The tag $TAG is not the version of Nyktus that this commit documents, $server."
+            exit 1
+          fi
           # Only a commit of main is released, whoever pushed the tag.
           git fetch --no-tags origin main
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
