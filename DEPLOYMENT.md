@@ -8,11 +8,11 @@ docs.nyktus.org is published by a release, not by a merge. A change on `main` go
 
 The upload mirrors the folder: files that are no longer in the build are deleted on the server, except `.well-known/`. The `.htaccess` comes from `src/public/` and switches on the clean URLs of the site, which Apache does not serve by itself.
 
-Docs-only changes release too. The version is that of the documentation and has nothing to do with the version of Nyktus. `feat` raises the minor version, everything else the patch version; to choose another version, end the message of the squash commit with `Release-As: 0.2.0`.
+The version of the documentation is the version of the Nyktus server that it documents, `data/releases.json` names it. The sync pull request ends with `Release-As: X.Y.Z` for that version, so merging it makes the release pull request propose it. Two checks keep the rule: the check "Version of Nyktus" fails a release pull request with another version, and the release workflow refuses a tag that is not `nyktus-docs-v` and the version in `data/releases.json`. A docs-only change after a release therefore waits for the next release of Nyktus; to publish it sooner, run the workflow "Release" on `main` by hand (Actions, Run workflow), which builds and uploads `main` without a version.
 
 ## Releases of Nyktus
 
-Pages name the versions of the server and the sensor with a placeholder, which the build fills from `data/releases.json`, the copy of the release manifest of the main repository. Once a day, [sync.yml](.github/workflows/sync.yml) looks for a new release of either. It then opens a pull request that moves the pin in `sync.json` to the release commit, which also brings the API reference and the catalog of that release. Merging the pull request leads to the release pull request of the documentation as usual. Actions, "Sync with the main repository", Run workflow, does the same at once.
+Pages name the versions of the server and the sensor with a placeholder, which the build fills from `data/releases.json`, the copy of the release manifest of the main repository. Once a day, [sync.yml](.github/workflows/sync.yml) looks for a new release of either. It then opens a pull request that moves the pin in `sync.json` to the release commit, which also brings the API reference and the catalog of that release. Merging the pull request, whose commit and description end with `Release-As: <version of the server>`, leads to the release pull request of the documentation with that version. Keep that line when you squash. Actions, "Sync with the main repository", Run workflow, does the same at once.
 
 ## One-time setup
 

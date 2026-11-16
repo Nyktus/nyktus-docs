@@ -24,6 +24,26 @@ jobs:
             exit 1
           fi
 
+  # The documentation is released with the version of Nyktus. A release pull request that
+  # proposes another one waits for the next release of Nyktus; a change that must be live sooner
+  # is published by a manual run of the release workflow on main, which needs no version.
+  version:
+    name: Version of Nyktus
+    if: ${{ startsWith(github.head_ref, 'release-please--') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: |
+          docs="$(jq -r '.["."]' .release-please-manifest.json)"
+          server="$(jq -r '.["."]' data/releases.json)"
+          if [ "$docs" != "$server" ]; then
+            echo "::error::This release is $docs, but the documentation documents Nyktus $server. Release it with the sync pull request for the next release of Nyktus, whose commit ends with 'Release-As: <version of Nyktus>', or publish main with a manual run of the release workflow."
+            exit 1
+          fi
+
   dco:
     name: DCO sign-off
     runs-on: ubuntu-24.04

@@ -80,11 +80,19 @@ jobs:
           gh auth setup-git
           git switch --force-create "$branch"
           git add sync.json data
-          git commit --message "$title"
+          # The documentation is released with the version of the server, so the release pull
+          # request must propose exactly that. release-please reads the footer from the squash
+          # commit, which GitHub builds from the commit or from the description, so both carry it.
+          body="Moves the pin to Nyktus/nyktus@${COMMIT}, the newest release of the server or the sensor."
+          if [ "$SERVER" != "$(node -p "require('./.release-please-manifest.json')['.']")" ]; then
+            git commit --message "$title" --message "Release-As: ${SERVER}"
+            body="${body}"$'\n\n'"Release-As: ${SERVER}"
+          else
+            git commit --message "$title"
+          fi
           git push --force origin "$branch"
           if [ -z "$(gh pr list --head "$branch" --state open --json number --jq '.[].number')" ]; then
-            gh pr create --base main --head "$branch" --title "$title" \
-              --body "Moves the pin to Nyktus/nyktus@${COMMIT}, the newest release of the server or the sensor."
+            gh pr create --base main --head "$branch" --title "$title" --body "$body"
           else
-            gh pr edit "$branch" --title "$title"
+            gh pr edit "$branch" --title "$title" --body "$body"
           fi
