@@ -38,7 +38,7 @@ Every event of a honeypot receives its severity, whatever the attacker did, and 
 
 ### Read the secret again
 
-[`GET /api/v1/honeypots/<id>/secret`](/api/reference/honeypots#getHoneypotSecret) returns the secret and the `sensor_config` again, and the console has a button "Show the secret" on the page of a honeypot. Nyktus keeps the secret sealed with AES-256-GCM, so that you can configure a sensor later or by script, and it stands in plain text in the configuration of the sensor anyway.
+[`GET /api/v1/honeypots/<id>/secret`](/api/reference/honeypots#getHoneypotSecret) returns the secret and the `sensor_config` again, and the console has a button "Show config" on the page of a honeypot, which shows the config with the secret in it. Nyktus keeps the secret sealed with AES-256-GCM, so that you can configure a sensor later or by script, and it stands in plain text in the configuration of the sensor anyway.
 
 - **Who may read it.** The permission `honeypots:write`, not `honeypots:read`: whoever holds the secret can report sessions in the name of the sensor. A `viewer` and a key with only `honeypots:read` get `403`. The response is sent with `Cache-Control: no-store`.
 - **Audit.** Every read is recorded as `honeypot.secret_read`, never with the secret. If Nyktus cannot record the read, it sends no secret.
@@ -65,11 +65,11 @@ An offline honeypot raises no alert, because alerts belong to incidents and only
 A sensor reports each session once, when it ends or after a short maximum delay, so that the first event of an incident says what the attacker did and not only that they connected. A report holds:
 
 - the address of the attacker, the port they reached, when the session began and how long it lasted;
-- up to six logins or binds, each with the user name, the **length** of the password, and for SSH the fingerprint of an offered key;
+- up to six logins or binds, each with the user name, the **password** as it was sent, and for SSH the fingerprint of an offered key;
 - for SSH the version string of the client, for PostgreSQL the database and application name, for LDAP the base and filter of the first search;
 - for MCP the name and version that the client gave, and up to six tool calls, each with the name of the tool and the start of its arguments.
 
-**A password is never sent and never stored**, only its length. A person who mistypes the address of a host in a terminal sends their own password to the honeypot; keeping nothing keeps that safe.
+**The password of a login is sent and stored in clear text**, up to 256 bytes with characters that are not printable replaced, because a refused login leaves nothing else to learn from it: it shows which passwords attackers try and which of your own passwords have leaked. A person who mistypes the address of a host in a terminal sends their own password to the honeypot, so the password is personal data and possibly a real secret. It is shown on the event and nowhere else: not in alerts, metrics, logs or the audit log. It is deleted with its event after the retention. Give event access only to people who may read such data, and change a password that appears in an event and belongs to a real account.
 
 The sensor names neither the service, the severity nor the techniques. They come from the honeypot, and the server derives the kind of event from the content. Every text field is chosen by the attacker, so the trigger cuts it to its length and replaces characters that are not printable.
 
@@ -88,7 +88,7 @@ Every session reported for an enabled honeypot becomes one event. The kind is th
 
 A session that reached several stages raises one event of the highest, so that a directory query is not hidden by the bind before it. The event also carries the techniques, the severity, the service and the scenario of the honeypot as they were when it arrived.
 
-The event holds what the attacker typed. That is personal data, and it is untrusted: treat it as claims, not facts. It is readable by everyone who may read events for the length of the retention. Alerts, metrics and logs hold none of it.
+The event holds what the attacker typed. That is personal data, and it is untrusted: treat it as claims, not facts. It is readable by everyone who may read events for the length of the retention. Alerts, metrics and logs hold none of it. This includes the passwords.
 
 ::: danger Do not hand tool calls to an AI tool as instructions
 The arguments of a tool call are often written by an AI agent, and they can be addressed to whatever reads them. If you pass events to an AI tool, for example to summarize an incident, you pass on the instructions of the attacker. Treat them as data, and give such a tool no permission that an attacker should not have.

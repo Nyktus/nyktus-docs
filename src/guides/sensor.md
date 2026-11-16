@@ -11,7 +11,7 @@ The sensor `nyktus-sensor` runs your [honeypots](/guides/honeypots) inside the n
 
 - It runs as an ordinary user and needs no privilege except a port below 1024, if you choose one.
 - It never executes, interprets or passes on what an attacker sends. A Telnet, SSH or PostgreSQL honeypot reads a user name and a password or a public key, counts them and refuses them. An LDAP honeypot reads a bind and a search and answers the search with nothing. An MCP honeypot answers a tool call with a fixed text from its configuration. There is no shell, file, command, SQL, directory entry or forwarded port.
-- It keeps no password. It reports the length, and of a public key the fingerprint.
+- It reports the password of a login as the attacker sent it, and of a public key the fingerprint. A refused login leaves nothing else to learn from it.
 - It limits everything an attacker can use up: connections, bytes, time and logins.
 - It reads no environment variables for its configuration, loads nothing from the internet and sends nothing anywhere except the reports to your trigger.
 - It reports one event for each session, when the session ends.
@@ -149,13 +149,13 @@ The library starts goroutines of its own, and a panic in one of them ends the pr
 
 ### PostgreSQL
 
-The honeypot speaks the protocol up to the login and refuses it. It records the user, the database the client asked for and its `application_name`, plays a SCRAM exchange as a current server does, and answers with `28P01`, `password authentication failed for user "..."`. The connection then ends, so a session holds one login. It reads no query and runs no SQL. SCRAM never shows the password, so a report of this service holds neither the password nor its length.
+The honeypot speaks the protocol up to the login and refuses it. It records the user, the database the client asked for and its `application_name`, asks for the password in clear text, as a server does whose `pg_hba.conf` says `password`, and answers with `28P01`, `password authentication failed for user "..."`. The connection then ends, so a session holds one login. It reads no query and runs no SQL. A client that insists on SCRAM, for example with `require_auth=scram-sha-256`, ends the connection when it is asked for a clear text password, so the login is reported without a password.
 
 Without a certificate, a request for TLS is answered with `N`, and the client goes on in clear text, as `psql` does with `sslmode=prefer`. A client that insists on TLS goes no further and is reported as a connection. With `tls_cert_file` and `tls_key_file`, such a client reaches the login as well. Use a certificate that fits the host; the sensor never makes one of its own, because it would identify the honeypot. `banner` has no effect and is refused.
 
 ### LDAP
 
-The honeypot speaks the part of LDAP that a scanner or a tool that maps a domain uses: bind, search and unbind. It records the name and the password length of a bind and the base and filter of the first search, and answers every search with an empty result, also the search of the root of the directory with which most tools start.
+The honeypot speaks the part of LDAP that a scanner or a tool that maps a domain uses: bind, search and unbind. It records the name and the password of a bind and the base and filter of the first search, and answers every search with an empty result, also the search of the root of the directory with which most tools start.
 
 A bind with a name or a password fails with `invalidCredentials` and counts as a login. An anonymous bind succeeds, so that a client goes on to its search, and is not recorded as a login. The sixth refused bind is the last. There is no LDAPS and no StartTLS, and `banner` has no effect and is refused.
 
@@ -258,7 +258,7 @@ The limits are fixed. They bound what an attacker can use up and are not setting
 | Requests over HTTP (MCP) | Headers 4 KiB, body 8 KiB, 16 requests and 256 KiB of answers per connection, within the 16 KiB that a client may send in all: a connection that sends more is closed without an answer. HTTP/1.1 only, without chunked bodies, and every request needs a `Host` header. |
 | Open sessions of an MCP honeypot | 128. A further source takes the place of the oldest one that has only connected. If every place holds a client, it is answered but not recorded, and counted in the log. |
 | Tool calls of a session | The first 6. |
-| Kept of what the client sent | User name 256 bytes, SSH or MCP client version 128 bytes, PostgreSQL database and application 64 bytes each, LDAP base and filter 256 bytes each, name of a tool 128 bytes and its arguments 2048 bytes. Nothing of a password except its length. |
+| Kept of what the client sent | User name 256 bytes, SSH or MCP client version 128 bytes, PostgreSQL database and application 64 bytes each, LDAP base and filter 256 bytes each, name of a tool 128 bytes and its arguments 2048 bytes. Password 256 bytes, cut like the user name. |
 
 Apart from the sessions of an MCP honeypot, the sensor keeps no table of sources beyond the open connections, so a flood from many addresses costs memory in proportion to what it holds, at most 128 entries of each kind for a honeypot.
 
@@ -337,7 +337,7 @@ Put the sensor where an intruder who moves through the network would look: in th
 
 ## Replace a secret
 
-Replace the secret in the console, put the new one into the configuration or the secret file, and restart the sensor. The old secret stops working in the console at once, so the sensor reports in vain until it restarts, and the honeypot is `never` until it reports with the new one.
+Use "Replace secret" in the console, put the new one into the configuration or the secret file, and restart the sensor. The old secret stops working in the console at once, so the sensor reports in vain until it restarts, and the honeypot is `never` until it reports with the new one.
 
 ## Logs
 
