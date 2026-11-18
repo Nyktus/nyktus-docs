@@ -1,6 +1,6 @@
 {
   "repository": "Nyktus/nyktus",
-  "ref": "55700e821ecd636ab9b62b5f0580e77f8e119726",
+  "ref": "e7edc997a3239e87f761aa240cd9cdd09444a72d",
   "files": {
     "data/openapi.yaml": {
       "source": "api/openapi.yaml",
@@ -12,7 +12,7 @@
     },
     "data/releases.json": {
       "source": ".release-please-manifest.json",
-      "sha256": "c12f5ff3f6b1967fd69a188be0a46a65ef255e6fb68c23ac832c4b9869af4801"
+      "sha256": "1c565d961ba3c4994d0febd549d766f013e85181d5b65278f7c8a6d42adaebe5"
     }
   }
 }
