@@ -27,7 +27,7 @@ DNS honeytokens need the DNS role on a host that the resolvers of the internet r
 
 ## Get the release
 
-Skip this section if you run only containers. Each release publishes an archive per platform for Linux on x86-64 and arm64 and for macOS on arm64. The archive holds `nyktus`, one binary for all roles with the web console embedded, the licence and a notice, and has an SBOM (`*.sbom.spdx.json`) that lists the Go modules in the binary. The sensor is released apart, see [the sensor](/guides/sensor#install).
+Skip this section if you run only containers. Each release publishes an archive per platform for Linux on x86-64 and arm64 and for macOS on arm64. The archive holds `nyktus`, one binary for all roles with the web console embedded, the licence and a notice, and has an SBOM (`*.sbom.spdx.json`) that lists the Go modules in the binary. The sensor has its own archives in the same release, see [the sensor](/guides/sensor#install).
 
 Download the archive for your platform, the checksums and their signature. Version `%%NYKTUS_VERSION%%` for Linux on x86-64:
 

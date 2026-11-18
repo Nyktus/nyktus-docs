@@ -214,7 +214,7 @@ Start the sensor. It runs as your own user, because it refuses a configuration t
 docker run --detach --rm --name nyktus-quickstart-sensor \
   --user "$(id -u):$(id -g)" --read-only --network nyktus_backend \
   --publish 127.0.0.1:2323:2323 --volume "$PWD/sensor:/etc/nyktus-sensor:ro" \
-  ghcr.io/nyktus/nyktus-sensor:%%NYKTUS_SENSOR_VERSION%%
+  ghcr.io/nyktus/nyktus-sensor:%%NYKTUS_VERSION%%
 ```
 
 Within seconds, the honeypot has the status `online`. Connect to it as an intruder would, and enter any name and password:
@@ -231,7 +231,7 @@ Login incorrect
 login:
 ```
 
-Press `Ctrl+C` to leave. The sensor reports the session when it ends, and a second open incident appears, named `Quickstart switch`, with the technique `T1110` (Brute Force). The event holds the name `admin` and the length of the password, never the password.
+Press `Ctrl+C` to leave. The sensor reports the session when it ends, and a second open incident appears, named `Quickstart switch`, with the technique `T1110` (Brute Force). The event holds the name `admin` and the password that you entered.
 
 No alert went out, because no alert channel exists yet. [Alerting](/guides/alerting) sets up channels for mail, Slack, Teams and webhooks. A channel receives the alerts of incidents that open after it exists.
 

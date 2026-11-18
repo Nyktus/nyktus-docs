@@ -1765,7 +1765,10 @@ paths:
       description: |
         Creates a honeytoken with a new trigger value of 128 random bits. Place
         its `trigger_url`, or for a `dns` one of its `trigger_names`, where an
-        attacker would find it. The trigger value cannot be changed: to replace
+        attacker would find it. A request to the trigger that carries the
+        `trigger_value` in its path, its query or a header also triggers the
+        honeytoken, so the value can be placed as an API key, a token or the
+        credentials of a URL. The trigger value cannot be changed: to replace
         a URL or name that has been exposed, create a new honeytoken and delete
         the old one.
 
@@ -2064,7 +2067,7 @@ paths:
           description: Lists only honeypots of this service.
           schema:
             type: string
-            enum: [ssh, telnet, postgres, ldap, mcp]
+            enum: [ssh, telnet, postgres, ldap, mcp, tcp]
         - name: enabled
           in: query
           description: Lists only enabled (`true`) or disabled (`false`) honeypots.
@@ -4393,7 +4396,7 @@ components:
                 type: string
               service:
                 type: string
-                enum: [ssh, telnet, postgres, ldap, mcp]
+                enum: [ssh, telnet, postgres, ldap, mcp, tcp]
         files:
           type: array
           description: |
@@ -4458,7 +4461,7 @@ components:
         trigger_value:
           type: string
           pattern: "^[a-z2-7]{26}$"
-          description: The value that triggers the honeytoken. It is part of `trigger_url` or `trigger_names` and cannot be changed.
+          description: The value that triggers the honeytoken. It is part of `trigger_url` or `trigger_names`, a request to the trigger triggers the honeytoken wherever it carries it, and it cannot be changed.
         trigger_url:
           type: [string, "null"]
           format: uri
@@ -4517,7 +4520,7 @@ components:
           format: uuid
         service:
           type: string
-          enum: [ssh, telnet, postgres, ldap, mcp]
+          enum: [ssh, telnet, postgres, ldap, mcp, tcp]
           description: The network service that the sensor emulates. It cannot be changed.
         name:
           type: string
@@ -4573,7 +4576,7 @@ components:
           format: uuid
         service:
           type: string
-          enum: [ssh, telnet, postgres, ldap, mcp]
+          enum: [ssh, telnet, postgres, ldap, mcp, tcp]
         name:
           type: string
         notes:
@@ -4616,7 +4619,9 @@ components:
             sensor: a list item for `honeypots:`, in YAML, with the identifier,
             the service, the usual port of the service as the address to listen
             on, and the secret. For `ssh` it also names the file of the host
-            key, which the operator creates. It holds the secret. Name and notes
+            key, which the operator creates. For `tcp`, which has no usual port,
+            the address is empty and the sensor does not start before the
+            operator has named the ports. It holds the secret. Name and notes
             are not part of it.
 
     HoneypotSecret:
@@ -4629,7 +4634,7 @@ components:
           format: uuid
         service:
           type: string
-          enum: [ssh, telnet, postgres, ldap, mcp]
+          enum: [ssh, telnet, postgres, ldap, mcp, tcp]
           description: The network service that the sensor emulates. It cannot be changed.
         name:
           type: string
@@ -4685,7 +4690,9 @@ components:
             sensor: a list item for `honeypots:`, in YAML, with the identifier,
             the service, the usual port of the service as the address to listen
             on, and the secret. For `ssh` it also names the file of the host
-            key, which the operator creates. It holds the secret. Name and notes
+            key, which the operator creates. For `tcp`, which has no usual port,
+            the address is empty and the sensor does not start before the
+            operator has named the ports. It holds the secret. Name and notes
             are not part of it.
 
     HoneypotPage:
@@ -4708,7 +4715,7 @@ components:
       properties:
         service:
           type: string
-          enum: [ssh, telnet, postgres, ldap, mcp]
+          enum: [ssh, telnet, postgres, ldap, mcp, tcp]
         name:
           type: string
           minLength: 1
@@ -5216,11 +5223,11 @@ components:
       description: |
         What a sensor reported about one session of an attacker with a honeypot. The sensor and the attacker chose
         everything but `service` and `event_type`: the text is shortened, and invalid and non-printable characters
-        are replaced; treat it as claims, not facts. Personal data. A password is never stored, only its length.
+        are replaced; treat it as claims, not facts. Personal data, which includes the passwords of the attempts.
       properties:
         service:
           type: string
-          enum: [ssh, telnet, postgres, ldap, mcp]
+          enum: [ssh, telnet, postgres, ldap, mcp, tcp]
           description: The service of the honeypot when the session ended.
         event_type:
           type: string
@@ -5293,16 +5300,24 @@ components:
     EventAttempt:
       type: object
       additionalProperties: false
-      required: [username, password_length, key_fingerprint]
+      required: [username, password, password_length, key_fingerprint]
       properties:
         username:
           type: string
           description: The user name or distinguished name that the attacker used. It may be empty.
+        password:
+          type: [string, "null"]
+          maxLength: 256
+          description: |
+            The password that was sent, with characters that are not printable replaced and cut to 256 bytes, or
+            null if none was or if the sensor is too old to send it. The empty text is an empty password. It was typed by the attacker, so it
+            is untrusted, and it can be the real password of someone who mistyped an address: it may hold personal
+            data, and never reaches an alert, a log or a metric.
         password_length:
           type: [integer, "null"]
           minimum: 0
           maximum: 65535
-          description: The length of the password that was sent, or null if none was. The password itself is not stored.
+          description: The length of the password that a sensor of an older version sent in place of the password, or null.
         key_fingerprint:
           type: [string, "null"]
           pattern: "^SHA256:[A-Za-z0-9+/]{43}$"
