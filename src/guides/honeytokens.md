@@ -67,6 +67,27 @@ Every honeytoken has a trigger value of 128 random bits, 26 characters of lowerc
 
 The value cannot be changed. If a URL has been exposed to people who should not have it, for example in a screenshot, create a new honeytoken, place its URL and delete the old one.
 
+### Where the value can stand
+
+The value raises an event wherever it stands in a request to the trigger, so that what carries it can look like what it pretends to be: an API key, a token or a password instead of a link. There is nothing to configure, and the trigger does not go by the name of a parameter or a header.
+
+In the examples, `<value>` stands for the trigger value of the honeytoken.
+
+| Place | Example |
+|---|---|
+| A segment of the path | `https://t.example.net/api/v2/<value>/status` |
+| The query | `https://t.example.net/export?api_key=sk_<value>` |
+| The value of a header | `X-Api-Key: <value>`, `Authorization: Bearer <value>`, `Cookie: sid=<value>` |
+| The credentials of a URL | `https://backup:<value>@t.example.net/`, which the client sends as `Authorization: Basic` |
+
+- **The value is a run of exactly 26 letters and digits**, delimited by anything else, and compared in lower case. A prefix with a separator counts, as in `sk_`, `key-` or `Bearer `. A value inside a longer run, such as `abc` followed by the value, does not.
+- **The trigger looks up at most 8 strings of that form per request:** those of the path first, then those of the query, then those of the headers by name. The first one that belongs to a honeytoken counts, also a disabled one. Neither the body nor the `Host` header is searched.
+- **The answer still follows the form of the request**, as described under [What the trigger answers](#what-the-trigger-answers). A `web_image` needs a path that ends with `.gif`, also when its value stands in the query or a header.
+- **A `POST` to `/` is the report of a sensor only if its `Authorization` header has the form of the secret of a honeypot.** Every other request there, for example from a log shipper that sends the value in a header, is recorded for the honeytoken.
+- **The event does not say where the value stood.**
+
+A value in the path or the query appears in the access logs of proxies and in browser histories; a value in a header does not. Make sure that the reverse proxy in front of the trigger does not log query strings.
+
 ### The address of the trigger
 
 `NYKTUS_TRIGGER_URL` is the public address of the trigger, and every URL starts with it. Whoever finds a honeytoken sees it, and so do the systems that loaded it.

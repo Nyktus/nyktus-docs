@@ -87,8 +87,8 @@ Every entry of `honeypots`:
 | Key | Default | Description |
 |---|---|---|
 | `id` | required | The identifier of the honeypot in the console. The sensor logs it. |
-| `service` | required | `telnet`, `ssh`, `postgres`, `ldap` or `mcp`. |
-| `listen` | required | `host:port` or `:port`. An empty host takes every address of both families. `0.0.0.0` takes IPv4 only. Entries must not conflict. |
+| `service` | required | `telnet`, `ssh`, `postgres`, `ldap`, `mcp` or `tcp`. |
+| `listen` | required | `host:port` or `:port`. An empty host takes every address of both families. `0.0.0.0` takes IPv4 only. Entries must not conflict. For `tcp`, also a list of up to 32 addresses, see [TCP](#tcp). |
 | `secret` or `secret_file` | one is required | The secret, or the file that holds it. |
 | `banner` | by service | What the service says first. See the services below. |
 | `login_prompt` | `login: ` | The prompt for the user name, up to 64 bytes of printable ASCII. Telnet only. |
@@ -242,6 +242,28 @@ A client of an older revision, up to `2025-11-25`, is refused with `400` and an 
 **A session is a source, not a connection.** The protocol has no identifier of a session, and many clients close their connection while the model thinks. All requests of one source, an IPv4 address or an IPv6 network of /64, are therefore one session, which ends after about a minute of silence, checked every five seconds, and within two minutes at the latest. Its duration is the time from its first to its last request. Only then is it reported, so **the alert can come up to two minutes after the call**. Two attackers behind one address become one event. Calling a tool that does not exist counts as a call and shows what the caller wanted.
 
 **The arguments of a tool call** are what the attacker or their AI agent wrote. They can hold personal data and instructions addressed to whatever reads them, see [What an event records](/guides/honeypots#what-an-event-records).
+
+### TCP
+
+The honeypot accepts connections on every address of `listen` and sends `banner` if you set one. Then it reads and drops what the client sends until the client leaves or a [limit](#limits) ends the connection. It never answers and keeps nothing of what was sent, because the first bytes of a connection are where credentials stand, such as the header of a Basic login. Every session is a `connection` event that names the port that was reached.
+
+```yaml
+  - id: "5c1d8e2a-7f3b-4a96-b0d4-2e8f1a6c9b73"
+    service: tcp
+    listen: [":3389", ":445"]
+    secret_file: /etc/nyktus-sensor/tcp.secret
+```
+
+All addresses of the entry are one honeypot, with one secret and one status. A honeypot takes up to 32 addresses and a sensor up to 256 in all, and every address has its own limits of connections. `banner` has no default and takes up to 256 bytes of printable ASCII, with line breaks and tabs, as for [Telnet](#telnet). `login_prompt`, host keys and TLS are refused.
+
+The console shows the entry with an empty address, because a port that every installation shares would identify the honeypot. The sensor does not start until you fill it in:
+
+```text
+invalid configuration:
+honeypots[0].listen[0]: must be host:port or :port, with an IP address or no host and a port from 1 to 65535
+```
+
+Do not put a `tcp` honeypot on a port that a real service of the host needs. A scanner of your own team raises an alert, as it does for every honeypot.
 
 ## Limits
 
