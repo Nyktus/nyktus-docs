@@ -12,7 +12,7 @@ The version of the documentation is the version of the Nyktus server that it doc
 
 ## Releases of Nyktus
 
-Pages name the versions of the server and the sensor with a placeholder, which the build fills from `data/releases.json`, the copy of the release manifest of the main repository. Once a day, [sync.yml](.github/workflows/sync.yml) looks for a new release of either. It then opens a pull request that moves the pin in `sync.json` to the release commit, which also brings the API reference and the catalog of that release. Merging the pull request, whose commit and description end with `Release-As: <version of the server>`, leads to the release pull request of the documentation with that version. Keep that line when you squash. Actions, "Sync with the main repository", Run workflow, does the same at once.
+Pages name the version of Nyktus, which the server and the sensor share, with a placeholder, which the build fills from `data/releases.json`, the copy of the release manifest of the main repository. Once a day, [sync.yml](.github/workflows/sync.yml) looks for a new release. It then opens a pull request that moves the pin in `sync.json` to the release commit, which also brings the API reference and the catalog of that release. Merging the pull request, whose commit and description end with `Release-As: <version of the server>`, leads to the release pull request of the documentation with that version. Keep that line when you squash. Actions, "Sync with the main repository", Run workflow, does the same at once.
 
 ## One-time setup
 

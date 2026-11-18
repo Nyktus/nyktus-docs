@@ -16,7 +16,6 @@ const apiTags = tagPages(loadSpec())
 const manifest = JSON.parse(readFileSync(new URL('../data/releases.json', import.meta.url), 'utf8'))
 const releaseVersions: Record<string, string> = {
   NYKTUS_VERSION: manifest['.'],
-  NYKTUS_SENSOR_VERSION: manifest.sensor,
 }
 
 // The guides and the security page share one sidebar. The security page keeps its address, because

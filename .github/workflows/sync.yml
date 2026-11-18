@@ -1,6 +1,6 @@
 name: Sync with the main repository
 
-# After a release of the server or the sensor, opens a pull request that moves the pin to it, so
+# After a release of Nyktus, opens a pull request that moves the pin to it, so
 # that the versions, the API reference and the catalog of the site follow the release. Merging
 # the pull request starts a release of the documentation. See DEPLOYMENT.md.
 on:
@@ -59,7 +59,6 @@ jobs:
           {
             echo "changed=true"
             echo "server=$(node -p "require('./$main/.release-please-manifest.json')['.']")"
-            echo "sensor=$(node -p "require('./$main/.release-please-manifest.json').sensor")"
             echo "commit=$commit"
           } >> "$GITHUB_OUTPUT"
       - name: Open the pull request
@@ -68,13 +67,12 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
           SERVER: ${{ steps.pin.outputs.server }}
-          SENSOR: ${{ steps.pin.outputs.sensor }}
           COMMIT: ${{ steps.pin.outputs.commit }}
         run: |
           bot="${APP_SLUG}[bot]"
           id="$(gh api "users/${bot}" --jq .id)"
           branch=sync/main-repository
-          title="docs: document Nyktus ${SERVER} and its sensor ${SENSOR}"
+          title="docs: document Nyktus ${SERVER}"
           git config user.name "$bot"
           git config user.email "${id}+${bot}@users.noreply.github.com"
           gh auth setup-git
@@ -83,7 +81,7 @@ jobs:
           # The documentation is released with the version of the server, so the release pull
           # request must propose exactly that. release-please reads the footer from the squash
           # commit, which GitHub builds from the commit or from the description, so both carry it.
-          body="Moves the pin to Nyktus/nyktus@${COMMIT}, the newest release of the server or the sensor."
+          body="Moves the pin to Nyktus/nyktus@${COMMIT}, the newest release of the server and the sensor."
           if [ "$SERVER" != "$(node -p "require('./.release-please-manifest.json')['.']")" ]; then
             git commit --message "$title" --message "Release-As: ${SERVER}"
             body="${body}"$'\n\n'"Release-As: ${SERVER}"
