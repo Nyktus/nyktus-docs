@@ -16,8 +16,9 @@ A honeypot is a network service that nobody has a reason to connect to, such as 
 | `postgres` | A PostgreSQL server. | A database host named in a configuration file or a connection string. |
 | `ldap` | A directory server. | A domain controller, or a directory that tools look for when they map the network. |
 | `mcp` | A server of the Model Context Protocol, through which AI agents find and call tools. | An internal knowledge base or tool that an intruder, or the AI agent they use, would query. |
+| `tcp` | A port that speaks no protocol: it accepts connections, may send a banner and never answers. | Ports that intruders scan for, such as 3389 (RDP) or 445 (SMB), on a host that offers neither. |
 
-A honeypot is one service on one address. To emulate several services of one host, create a honeypot for each and add them to the same scenario, so that their events become one incident. The console has no port for a honeypot: the sensor reports the port that was reached.
+A honeypot is one service on one address; only a `tcp` honeypot listens on several ports. To emulate several services of one host, create a honeypot for each and add them to the same scenario, so that their events become one incident. The console has no port for a honeypot: the sensor reports the port that was reached.
 
 The service cannot be changed later, because the sensor is configured for it.
 
@@ -67,7 +68,8 @@ A sensor reports each session once, when it ends or after a short maximum delay,
 - the address of the attacker, the port they reached, when the session began and how long it lasted;
 - up to six logins or binds, each with the user name, the **password** as it was sent, and for SSH the fingerprint of an offered key;
 - for SSH the version string of the client, for PostgreSQL the database and application name, for LDAP the base and filter of the first search;
-- for MCP the name and version that the client gave, and up to six tool calls, each with the name of the tool and the start of its arguments.
+- for MCP the name and version that the client gave, and up to six tool calls, each with the name of the tool and the start of its arguments;
+- for TCP nothing of what the client sent, because the first bytes of a connection are where credentials stand.
 
 **The password of a login is sent and stored in clear text**, up to 256 bytes with characters that are not printable replaced, because a refused login leaves nothing else to learn from it: it shows which passwords attackers try and which of your own passwords have leaked. A person who mistypes the address of a host in a terminal sends their own password to the honeypot, so the password is personal data and possibly a real secret. It is shown on the event and nowhere else: not in alerts, metrics, logs or the audit log. It is deleted with its event after the retention. Give event access only to people who may read such data, and change a password that appears in an event and belongs to a real account.
 
@@ -86,7 +88,7 @@ Every session reported for an enabled honeypot becomes one event. The kind is th
 | `directory_query` | searched a directory (`ldap` only) | T1087.002 Account Discovery: Domain Account |
 | `tool_call` | called a tool (`mcp` only) | T1213 Data from Information Repositories |
 
-A session that reached several stages raises one event of the highest, so that a directory query is not hidden by the bind before it. The event also carries the techniques, the severity, the service and the scenario of the honeypot as they were when it arrived.
+A session of a `tcp` honeypot is always a `connection`. A session that reached several stages raises one event of the highest, so that a directory query is not hidden by the bind before it. The event also carries the techniques, the severity, the service and the scenario of the honeypot as they were when it arrived.
 
 The event holds what the attacker typed. That is personal data, and it is untrusted: treat it as claims, not facts. It is readable by everyone who may read events for the length of the retention. Alerts, metrics and logs hold none of it. This includes the passwords.
 
