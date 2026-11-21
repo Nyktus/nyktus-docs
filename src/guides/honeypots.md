@@ -16,6 +16,7 @@ A honeypot is a network service that nobody has a reason to connect to, such as 
 | `postgres` | A PostgreSQL server. | A database host named in a configuration file or a connection string. |
 | `ldap` | A directory server. | A domain controller, or a directory that tools look for when they map the network. |
 | `mcp` | A server of the Model Context Protocol, through which AI agents find and call tools. | An internal knowledge base or tool that an intruder, or the AI agent they use, would query. |
+| `smtp` | The sign-in of a mail server, over STARTTLS or TLS. It never accepts a message. | A mail relay or submission host that applications and scripts name in their configuration. |
 | `tcp` | A port that speaks no protocol: it accepts connections, may send a banner and never answers. | Ports that intruders scan for, such as 3389 (RDP) or 445 (SMB), on a host that offers neither. |
 
 A honeypot is one service on one address; only a `tcp` honeypot listens on several ports. To emulate several services of one host, create a honeypot for each and add them to the same scenario, so that their events become one incident. The console has no port for a honeypot: the sensor reports the port that was reached.
@@ -27,7 +28,7 @@ The service cannot be changed later, because the sensor is configured for it.
 Create a honeypot in the web console, or with [`POST /api/v1/honeypots`](/api/reference/honeypots#createHoneypot) from a script. Add `scenario_id` to create it in a [scenario](/guides/scenarios#add-decoys). The response holds two things the sensor needs:
 
 - **The secret.** The sensor authenticates to the trigger with it: 256 random bits, 43 characters, with no prefix, so that nothing on the sensor host marks it as a decoy.
-- **`sensor_config`.** The entry of this honeypot for the configuration file of the sensor: its identifier, its service, the usual port of the service (`:8080` for `mcp`, which has none) and the secret. It holds neither the name nor the notes, which have no place on the host of a sensor. For `mcp` it is a frame that you fill in, see [MCP](/guides/sensor#mcp).
+- **`sensor_config`.** The entry of this honeypot for the configuration file of the sensor: its identifier, its service, the usual port of the service (`:8080` for `mcp`, which has none, and the submission port `:587` for `smtp`) and the secret. It holds neither the name nor the notes, which have no place on the host of a sensor. For `mcp` and `smtp` it is a frame that you fill in, see [MCP](/guides/sensor#mcp) and [SMTP](/guides/sensor#smtp).
 
 Store both where the sensor reads them, such as a [secret file](/guides/sensor#secrets-in-files) that only the sensor's user can read. A secret that an attacker takes from the sensor host reveals only the honeypots configured there, because every honeypot has its own.
 
@@ -67,7 +68,7 @@ A sensor reports each session once, when it ends or after a short maximum delay,
 
 - the address of the attacker, the port they reached, when the session began and how long it lasted;
 - up to six logins or binds, each with the user name, the **password** as it was sent, and for SSH the fingerprint of an offered key;
-- for SSH the version string of the client, for PostgreSQL the database and application name, for LDAP the base and filter of the first search;
+- for SSH the version string of the client, for SMTP the name that the client gave in `EHLO`, for PostgreSQL the database and application name, for LDAP the base and filter of the first search;
 - for MCP the name and version that the client gave, and up to six tool calls, each with the name of the tool and the start of its arguments;
 - for TCP nothing of what the client sent, because the first bytes of a connection are where credentials stand.
 
