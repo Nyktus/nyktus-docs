@@ -87,14 +87,16 @@ Every entry of `honeypots`:
 | Key | Default | Description |
 |---|---|---|
 | `id` | required | The identifier of the honeypot in the console. The sensor logs it. |
-| `service` | required | `telnet`, `ssh`, `postgres`, `ldap`, `mcp` or `tcp`. |
+| `service` | required | `telnet`, `ssh`, `postgres`, `ldap`, `mcp`, `smtp` or `tcp`. |
 | `listen` | required | `host:port` or `:port`. An empty host takes every address of both families. `0.0.0.0` takes IPv4 only. Entries must not conflict. For `tcp`, also a list of up to 32 addresses, see [TCP](#tcp). |
 | `secret` or `secret_file` | one is required | The secret, or the file that holds it. |
 | `banner` | by service | What the service says first. See the services below. |
 | `login_prompt` | `login: ` | The prompt for the user name, up to 64 bytes of printable ASCII. Telnet only. |
 | `host_key_file` | required for `ssh` | The file with the Ed25519 private key of the server. A relative path is relative to the configuration file. |
 | `rsa_host_key_file` | none | A second host key, RSA with at least 2048 bits, for old clients. SSH only. |
-| `tls_cert_file`, `tls_key_file` | none | A certificate chain and its key, which lets a client use TLS. PostgreSQL and MCP only, always both. The key must be readable by the sensor alone. |
+| `tls_cert_file`, `tls_key_file` | none; required for `smtp` | A certificate chain and its key, which lets a client use TLS. PostgreSQL, MCP and SMTP only, always both. The key must be readable by the sensor alone. |
+| `hostname` | required for `smtp` | The name of the mail server, see [SMTP](#smtp). SMTP only. |
+| `tls_mode` | required for `smtp` | `starttls` or `implicit`, see [SMTP](#smtp). SMTP only. |
 | `mcp` | required for `mcp` | What the honeypot presents, see [MCP](#mcp). MCP only. |
 
 ### Secrets in files
@@ -243,6 +245,89 @@ A client of an older revision, up to `2025-11-25`, is refused with `400` and an 
 
 **The arguments of a tool call** are what the attacker or their AI agent wrote. They can hold personal data and instructions addressed to whatever reads them, see [What an event records](/guides/honeypots#what-an-event-records).
 
+### SMTP
+
+The honeypot plays the sign-in of a mail server and answers as Postfix does. It offers `AUTH PLAIN` and `AUTH LOGIN` only inside TLS, records the user name and the password, and refuses them with `535`. It never accepts a message: every recipient is refused with `554 5.7.1 Relay access denied` and `DATA` with `554 5.5.1 Error: no valid recipients`, so nothing is read and nothing is relayed. It records the name that the client gives in `EHLO`. No answer names an address or anything else that the client sent, and `VRFY` is disabled.
+
+```yaml
+  - id: "9e4b2c71-5d3a-4f86-a1c0-7b2e8d6f3a54"
+    service: smtp
+    listen: ":587"
+    secret_file: /etc/nyktus-sensor/smtp.secret
+    hostname: mail.example.com
+    tls_mode: starttls
+    tls_cert_file: smtp.crt
+    tls_key_file: smtp.key
+    banner: "Postfix (Debian/GNU)"
+```
+
+| Key | Description |
+|---|---|
+| `hostname` | The name of the server in its greeting and its answer to `EHLO`: letters, digits and hyphens in labels of up to 63 bytes, up to 253 bytes in all. |
+| `tls_mode` | `starttls` for ports 25 and 587: the server speaks plain text first and offers STARTTLS. `implicit` for port 465: TLS from the first byte. One honeypot has one mode; for ports 587 and 465, create two honeypots, which may share a certificate. |
+| `tls_cert_file`, `tls_key_file` | The certificate of the server and its key. The certificate must name `hostname` in its subject alternative names, as a client checks; a wildcard such as `*.example.com` counts, the common name does not. |
+| `banner` | Optional: what follows `ESMTP` in the greeting, up to 128 bytes of printable ASCII on one line. Without it the greeting is `220 mail.example.com ESMTP`. |
+
+TLS is required, because a mail server without it looks like one that nobody uses, and the sensor never makes a certificate of its own. A certificate of your internal authority shows a client no warning. Without one, create a self-signed certificate for the name of the server once, with OpenSSL 1.1.1 or later, and keep it, because a certificate that changes would mark the honeypot. Replace `mail.example.com` with the `hostname`:
+
+```sh
+openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
+  -keyout smtp.key -out smtp.crt \
+  -subj "/CN=mail.example.com" \
+  -addext "subjectAltName=DNS:mail.example.com"
+chmod 600 smtp.key
+openssl x509 -in smtp.crt -noout -ext subjectAltName
+```
+
+```text
+X509v3 Subject Alternative Name:
+    DNS:mail.example.com
+```
+
+The console shows the entry with an empty `hostname`, `tls_mode` and certificate, because a name that every installation shares would identify the honeypot. The sensor does not start until you fill them in:
+
+```text
+invalid configuration:
+honeypots[0].tls_cert_file and tls_key_file: required for smtp: a mail server without TLS looks like one that nobody uses, and the sensor never makes a certificate
+honeypots[0].hostname: required: a name that every installation shared would identify the honeypot
+honeypots[0].tls_mode: must be "starttls" or "implicit"
+```
+
+If the certificate is for another name, the sensor does not start either:
+
+```text
+invalid configuration:
+honeypots[0].tls_cert_file: the certificate does not name the hostname "smtp.example.org" in its subject alternative names
+```
+
+Before TLS, `EHLO` offers `STARTTLS` and no `AUTH`, and `AUTH`, `MAIL`, `RCPT` and `DATA` are answered with `530 5.7.0 Must issue a STARTTLS command first`, so a password never travels in clear text. After `STARTTLS`, the server drops whatever the client sent in clear text behind the command, because anyone on the way could have added it, and the client greets again. To see what a client sees, connect with `openssl s_client`, which sends `EHLO` and `STARTTLS` itself and checks the certificate against the name:
+
+```sh
+openssl s_client -starttls smtp -connect 192.0.2.10:587 \
+  -servername mail.example.com -CAfile smtp.crt -verify_hostname mail.example.com -quiet
+```
+
+Then type `EHLO client.example.net`, `AUTH PLAIN AGFsaWNlAFdpbnRlcjIwMjYh` (the user `alice` with a password, in base64) and `QUIT`, each on a line of its own. The server answers:
+
+```text
+Connecting to 192.0.2.10
+depth=0 CN=mail.example.com
+verify return:1
+250 DSN
+250-mail.example.com
+250-SIZE 10240000
+250-AUTH PLAIN LOGIN
+250-ENHANCEDSTATUSCODES
+250-8BITMIME
+250 DSN
+535 5.7.8 Error: authentication failed: authentication failure
+221 2.0.0 Bye
+```
+
+The first `250 DSN` is the end of the answer to the `EHLO` that `openssl` sent before TLS. The event shows the login of `alice` with its password and `client.example.net` as the name in `EHLO`.
+
+A session holds six logins. The server ends the connection with `421 4.7.0 mail.example.com Error: too many errors` when the client asks for a seventh or after twenty refused commands, as Postfix does. `login_prompt` and host keys are refused.
+
 ### TCP
 
 The honeypot accepts connections on every address of `listen` and sends `banner` if you set one. Then it reads and drops what the client sends until the client leaves or a [limit](#limits) ends the connection. It never answers and keeps nothing of what was sent, because the first bytes of a connection are where credentials stand, such as the header of a Basic login. Every session is a `connection` event that names the port that was reached.
@@ -277,10 +362,11 @@ The limits are fixed. They bound what an attacker can use up and are not setting
 | Silence | 30 seconds without a byte from the client, 10 seconds for a client that does not read. |
 | Data from one client | 16 KiB for the whole connection. |
 | Logins of a session | 6, passwords and offered SSH keys together. A PostgreSQL session holds one. |
+| Refused commands of an SMTP session | 20. The server then ends the connection. A line of more than 2048 bytes is refused and dropped. |
 | Requests over HTTP (MCP) | Headers 4 KiB, body 8 KiB, 16 requests and 256 KiB of answers per connection, within the 16 KiB that a client may send in all: a connection that sends more is closed without an answer. HTTP/1.1 only, without chunked bodies, and every request needs a `Host` header. |
 | Open sessions of an MCP honeypot | 128. A further source takes the place of the oldest one that has only connected. If every place holds a client, it is answered but not recorded, and counted in the log. |
 | Tool calls of a session | The first 6. |
-| Kept of what the client sent | User name 256 bytes, SSH or MCP client version 128 bytes, PostgreSQL database and application 64 bytes each, LDAP base and filter 256 bytes each, name of a tool 128 bytes and its arguments 2048 bytes. Password 256 bytes, cut like the user name. |
+| Kept of what the client sent | User name 256 bytes, SSH or MCP client version and the name that an SMTP client gives 128 bytes each, PostgreSQL database and application 64 bytes each, LDAP base and filter 256 bytes each, name of a tool 128 bytes and its arguments 2048 bytes. Password 256 bytes, cut like the user name. |
 
 Apart from the sessions of an MCP honeypot, the sensor keeps no table of sources beyond the open connections, so a flood from many addresses costs memory in proportion to what it holds, at most 128 entries of each kind for a honeypot.
 
